@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Play, 
@@ -16,10 +11,28 @@ import {
   ChevronDown,
   LayoutGrid,
   List as ListIcon,
-  Music4
+  Music4,
+  Sun,
+  Moon,
+  Palette
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_TRACKS, CATEGORIES, AudioTrack } from './constants';
+import { App as CapApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
+
+const ACCENT_THEMES = [
+  { id: 'default', color: '#f97316' },
+  { id: 'emerald', color: '#10b981' },
+  { id: 'rose', color: '#f43f5e' },
+  { id: 'blue', color: '#3b82f6' },
+  { id: 'violet', color: '#8b5cf6' },
+  { id: 'amber', color: '#f59e0b' },
+  { id: 'cyan', color: '#06b6d4' },
+  { id: 'indigo', color: '#6366f1' },
+  { id: 'teal', color: '#14b8a6' },
+  { id: 'pink', color: '#ec4899' },
+];
 
 export default function App() {
   // State
@@ -33,30 +46,75 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFullPlayer, setShowFullPlayer] = useState(false);
-  const [volume, setVolume] = useState(0.8);
+  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [accentTheme, setAccentTheme] = useState('default');
+  const [showThemePicker, setShowThemePicker] = useState(false);
 
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Theme synchronization
+  useEffect(() => {
+    const root = window.document.documentElement;
+    
+    // Initialize Capacitor Status Bar Overlay
+    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+
+    if (isDarkMode) {
+      root.classList.remove('light');
+      StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+    } else {
+      root.classList.add('light');
+      StatusBar.setStyle({ style: Style.Light }).catch(() => {});
+    }
+    
+    if (accentTheme === 'default') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', accentTheme);
+    }
+  }, [isDarkMode, accentTheme]);
+
+  // Capacitor Back Button Handling
+  useEffect(() => {
+    const handleBackButton = CapApp.addListener('backButton', () => {
+      if (showThemePicker) {
+        setShowThemePicker(false);
+      } else if (showFullPlayer) {
+        setShowFullPlayer(false);
+      } else if (activeCategory !== 'all' || searchQuery !== '') {
+        setActiveCategory('all');
+        setSearchQuery('');
+      } else {
+        // Option to minimize or exit on double tap
+      }
+    });
+
+    return () => {
+      handleBackButton.then(h => h.remove());
+    };
+  }, [showFullPlayer, activeCategory, searchQuery, showThemePicker]);
 
   // Load persistence and fetch tracks
   useEffect(() => {
     const loadApp = async () => {
       try {
-        // Fetch local JSON
         const response = await fetch('/audio/tracks.json');
         const data = await response.json();
-        
-        // Map filenames to full URLs if they are local
         const mappedData = data.map((track: any) => ({
           ...track,
-          // If url is not provided but filename is, use local path
           url: track.url || `/audio/${track.filename}`
         }));
-        
         setTracks(mappedData);
 
         const savedFavorites = localStorage.getItem('pashto_player_favorites');
         if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
+
+        const savedTheme = localStorage.getItem('pashto_player_theme');
+        if (savedTheme) setIsDarkMode(savedTheme === 'dark');
+
+        const savedAccent = localStorage.getItem('pashto_player_accent');
+        if (savedAccent) setAccentTheme(savedAccent);
 
         const lastTrackId = localStorage.getItem('pashto_player_last_track');
         const lastProgress = localStorage.getItem('pashto_player_last_progress');
@@ -74,14 +132,21 @@ export default function App() {
         setLoading(false);
       }
     };
-
     loadApp();
   }, []);
 
-  // Sync favorites
+  // Sync state to storage
   useEffect(() => {
     localStorage.setItem('pashto_player_favorites', JSON.stringify(favorites));
   }, [favorites]);
+
+  useEffect(() => {
+    localStorage.setItem('pashto_player_theme', isDarkMode ? 'dark' : 'light');
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('pashto_player_accent', accentTheme);
+  }, [accentTheme]);
 
   // Handle Play/Pause
   const togglePlay = () => {
@@ -89,7 +154,6 @@ export default function App() {
       if (filteredTracks.length > 0) handleTrackSelect(filteredTracks[0]);
       return;
     }
-
     if (isPlaying) {
       audioRef.current?.pause();
     } else {
@@ -173,39 +237,51 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0502] text-white font-sans selection:bg-orange-500/30 overflow-hidden flex flex-col items-center" dir="rtl">
+    <div className="min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center" dir="rtl">
       {/* Background Atmosphere */}
       <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute inset-0 bg-radial-at-t from-[#3a1510] to-transparent opacity-60 blur-3xl" />
-        <div className="absolute bottom-0 left-0 w-full h-1/2 bg-gradient-to-t from-[#0a0502] to-transparent" />
+        <div className={`absolute inset-0 bg-radial-at-t transition-opacity duration-1000 ${isDarkMode ? 'opacity-60' : 'opacity-100'} blur-3xl`} style={{ backgroundImage: `radial-gradient(circle at top, var(--accent-soft), transparent)` }} />
       </div>
 
       {/* Main Content */}
-      <main className="relative z-10 w-full max-w-lg h-screen flex flex-col px-4 pt-6 pb-24 lg:pb-32">
+      <main className="relative z-10 w-full max-w-lg h-screen flex flex-col px-4 pt-4 pb-24 lg:pb-32 overflow-hidden safe-area-top">
         {/* Header */}
-        <header className="flex items-center justify-between mb-8">
+        <header className="flex items-center justify-between mb-8 mt-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white mb-1">صوتي فایلونه</h1>
-            <p className="text-xs text-orange-200/50 uppercase tracking-widest font-mono">اسلامي غږیز پلیر</p>
+            <h1 className="text-2xl font-bold tracking-tight mb-1">صوتي فایلونه</h1>
+            <p className={`text-[10px] uppercase tracking-widest font-mono opacity-50`}>اسلامي غږیز پلیر</p>
           </div>
-          <motion.div 
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="p-3 bg-white/5 border border-white/10 rounded-2xl backdrop-blur-md"
-          >
-            <Music4 className="w-5 h-5 text-orange-500" />
-          </motion.div>
+          <div className="flex gap-2">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowThemePicker(!showThemePicker)}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+            >
+              <Palette className="w-5 h-5" style={{ color: 'var(--accent-color)' }} />
+            </motion.button>
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+            >
+              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </motion.button>
+          </div>
         </header>
 
         {/* Search */}
         <div className="relative mb-6">
-          <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
+          <Search className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30`} />
           <input 
             type="text" 
             placeholder="لټون..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-2xl py-3 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/30 transition-all placeholder:text-white/20"
+            className={`w-full border rounded-2xl py-3 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-soft)] transition-all ${
+              isDarkMode 
+                ? 'bg-white/5 border-white/10 placeholder:text-white/20' 
+                : 'bg-black/5 border-black/10 placeholder:text-black/20 text-black'
+            }`}
           />
         </div>
 
@@ -217,9 +293,10 @@ export default function App() {
               onClick={() => setActiveCategory(cat.id)}
               className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${
                 activeCategory === cat.id 
-                  ? 'bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/20' 
-                  : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                  ? 'bg-accent border-accent text-white shadow-lg' 
+                  : `border-transparent ${isDarkMode ? 'bg-white/5 text-white/50 hover:bg-white/10' : 'bg-black/5 text-black/50 hover:bg-black/10'}`
               }`}
+              style={activeCategory === cat.id ? { backgroundColor: 'var(--accent-color)', borderColor: 'var(--accent-color)', boxShadow: `0 10px 15px -3px var(--accent-soft)` } : {}}
             >
               {cat.label}
             </button>
@@ -227,15 +304,12 @@ export default function App() {
         </div>
 
         {/* List Body */}
-        <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar pr-1">
+        <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar pr-1 pb-4">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 opacity-40">
-              <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                className="w-10 h-10 border-2 border-orange-500 border-t-transparent rounded-full mb-4"
-              />
-              <p className="text-sm">لوډېږي...</p>
+             <div className="flex justify-center py-10">
+               <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
+                 <Music4 className="w-6 h-6 opacity-30" style={{ color: 'var(--accent-color)' }} />
+               </motion.div>
             </div>
           ) : filteredTracks.map((track, idx) => (
             <motion.div
@@ -247,50 +321,43 @@ export default function App() {
               onClick={() => handleTrackSelect(track)}
               className={`group relative flex items-center p-3 rounded-2xl transition-all cursor-pointer border ${
                 currentTrack?.id === track.id
-                  ? 'bg-orange-600/20 border-orange-500/50'
-                  : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'
+                  ? 'bg-accent-soft border-accent'
+                  : `${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10 hover:border-black/10'}`
               }`}
+              style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}
             >
-              <div className="relative w-12 h-12 rounded-xl overflow-hidden mr-0 ml-3 flex-shrink-0">
+              <div className="relative w-12 h-12 rounded-xl overflow-hidden ml-3 flex-shrink-0">
                 <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                 {currentTrack?.id === track.id && isPlaying && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                     <div className="flex gap-0.5 items-end h-3">
-                      <motion.div animate={{ height: [4, 12, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-orange-500 rounded-full" />
-                      <motion.div animate={{ height: [8, 4, 10] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-orange-500 rounded-full" />
-                      <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-orange-500 rounded-full" />
+                      <motion.div animate={{ height: [4, 12, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                      <motion.div animate={{ height: [8, 4, 10] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                      <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
                     </div>
                   </div>
                 )}
               </div>
               
               <div className="flex-1 min-w-0">
-                <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-orange-400' : 'text-white'}`}>
+                <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
                   {track.title}
                 </h3>
-                <p className="text-xs text-white/40 truncate mt-0.5">{track.artist} • {track.categoryLabel}</p>
+                <p className={`text-xs truncate mt-0.5 opacity-40`}>{track.artist} • {track.categoryLabel}</p>
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-[10px] font-mono text-white/30">{track.duration}</span>
+                <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
                 <button 
                   onClick={(e) => toggleFavorite(track.id, e)}
-                  className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-orange-500' : 'text-white/20 hover:text-white/40'}`}
+                  className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
+                  style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
                 >
                   <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
                 </button>
               </div>
             </motion.div>
           ))}
-
-          {filteredTracks.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 opacity-40">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
-                <Search className="w-6 h-6" />
-              </div>
-              <p className="text-sm">هیڅ فایل ونه موندل شو</p>
-            </div>
-          )}
         </div>
       </main>
 
@@ -301,35 +368,37 @@ export default function App() {
             initial={{ y: 100 }}
             animate={{ y: 0 }}
             exit={{ y: 100 }}
-            className="fixed bottom-0 w-full max-w-lg z-50 px-4 pb-6"
+            className="fixed bottom-0 w-full max-w-lg z-40 px-4 pb-6 safe-area-bottom"
           >
             <div 
               onClick={() => setShowFullPlayer(true)}
-              className="bg-[#1a1614]/90 backdrop-blur-xl border border-white/10 rounded-3xl p-3 flex items-center shadow-2xl shadow-black/80 cursor-pointer"
+              className={`backdrop-blur-xl border rounded-3xl p-3 flex items-center shadow-2xl transition-colors duration-500 ${
+                isDarkMode ? 'bg-[#1a1614]/90 border-white/10 shadow-black/80' : 'bg-white/90 border-black/10 shadow-orange-900/10'
+              }`}
             >
               <div className="w-10 h-10 rounded-xl overflow-hidden ml-3">
                 <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-medium truncate">{currentTrack.title}</h4>
-                <p className="text-[10px] text-white/40 uppercase tracking-widest">{currentTrack.artist}</p>
+                <p className={`text-[10px] uppercase tracking-widest opacity-40`}>{currentTrack.artist}</p>
               </div>
               <div className="flex items-center gap-1">
                 <button 
                   onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                  className="w-10 h-10 flex items-center justify-center text-white"
+                  className="w-10 h-10 flex items-center justify-center"
                 >
                   {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleNext(); }}
-                  className="w-10 h-10 flex items-center justify-center text-white/60 hover:text-white transition-colors"
+                  className="w-10 h-10 flex items-center justify-center opacity-60 hover:opacity-100"
                 >
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
-              <div className="absolute top-0 left-0 h-1 bg-white/5 w-full rounded-t-3xl overflow-hidden">
-                <div className="h-full bg-orange-500 transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div className={`absolute top-0 left-0 h-1 w-full rounded-t-3xl overflow-hidden ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
+                <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progress}%`, backgroundColor: 'var(--accent-color)' }} />
               </div>
             </div>
           </motion.div>
@@ -343,77 +412,76 @@ export default function App() {
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed inset-0 z-[60] bg-[#0a0502] flex flex-col px-8 pt-12 pb-16"
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className={`fixed inset-0 z-50 flex flex-col px-8 pt-4 pb-16 transition-colors duration-500 safe-area-top safe-area-bottom ${isDarkMode ? 'bg-[#0a0502]' : 'bg-[#fdf8f5]'}`}
           >
-            {/* Background Atmosphere for Full Player */}
-            <div className="absolute inset-0 pointer-events-none overflow-hidden h-[60%]">
+            <div className="absolute inset-0 pointer-events-none overflow-hidden h-[60%] opacity-50">
               <motion.div 
                 animate={{ scale: [1, 1.2, 1], rotate: [0, 5, 0] }}
                 transition={{ duration: 15, repeat: Infinity }}
-                className="absolute -top-1/4 -right-1/4 w-[150%] aspect-square bg-radial-at-c from-orange-900/40 to-transparent blur-3xl" 
+                className="absolute -top-1/4 -right-1/4 w-[150%] aspect-square blur-3xl opacity-50" 
+                style={{ backgroundImage: `radial-gradient(circle at center, var(--accent-soft), transparent)` }}
               />
             </div>
 
-            <header className="relative z-10 flex items-center justify-between mb-12">
+            <header className="relative z-10 flex items-center justify-between mb-8 mt-4">
               <button 
                 onClick={() => setShowFullPlayer(false)}
-                className="w-12 h-12 flex items-center justify-center bg-white/5 border border-white/10 rounded-2xl text-white/50 hover:text-white transition-all"
+                className={`w-12 h-12 flex items-center justify-center border rounded-2xl transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
               >
                 <ChevronDown className="w-6 h-6" />
               </button>
-              <span className="text-[10px] text-white/30 uppercase tracking-[0.2em] font-mono">اوس غږیږي</span>
+              <span className={`text-[10px] uppercase tracking-[0.2em] font-mono opacity-30`}>اوس غږیږي</span>
               <button 
                 onClick={() => toggleFavorite(currentTrack.id)}
-                className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${favorites.includes(currentTrack.id) ? 'bg-orange-600/20 text-orange-500' : 'bg-white/5 border border-white/10 text-white/30'}`}
+                className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${favorites.includes(currentTrack.id) ? 'bg-accent-soft text-accent' : `${isDarkMode ? 'bg-white/5 border-white/10 text-white/30' : 'bg-black/5 border-black/10 text-black/30'}`}`}
+                style={favorites.includes(currentTrack.id) ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent-color)' } : {}}
               >
                 <Heart className={`w-5 h-5 ${favorites.includes(currentTrack.id) ? 'fill-current' : ''}`} />
               </button>
             </header>
 
-            <div className="relative z-10 flex-1 flex flex-col items-center justify-center">
+            <div className="relative z-10 flex-1 flex flex-col items-center justify-center mt-4">
               <motion.div 
                 layoutId="player-art"
-                style={{ borderRadius: '2rem' }}
-                className="w-full aspect-square max-w-[320px] shadow-2xl shadow-black/80 overflow-hidden mb-12 ring-1 ring-white/10"
+                style={{ borderRadius: '2.5rem' }}
+                className={`w-full aspect-square max-w-[320px] shadow-2xl overflow-hidden mb-10 ring-1 ${isDarkMode ? 'shadow-black/80 ring-white/10' : 'shadow-black/5 ring-black/5'}`}
               >
                 <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
               </motion.div>
 
-              <div className="text-center mb-10 w-full">
-                <h2 className="text-2xl font-bold text-white mb-2 leading-tight">{currentTrack.title}</h2>
-                <p className="text-orange-500 font-medium tracking-wide">{currentTrack.artist}</p>
-                <p className="text-white/30 text-xs mt-3 bg-white/5 inline-block px-3 py-1 rounded-full uppercase tracking-tighter">
+              <div className="text-center mb-8 w-full px-4">
+                <h2 className="text-2xl font-bold mb-2 leading-tight">{currentTrack.title}</h2>
+                <p className="text-accent font-bold tracking-wide text-lg" style={{ color: 'var(--accent-color)' }}>{currentTrack.artist}</p>
+                <p className={`text-[10px] mt-4 inline-block px-4 py-1.5 rounded-full uppercase tracking-tighter font-semibold ${isDarkMode ? 'bg-white/5 text-white/30' : 'bg-black/5 text-black/30'}`}>
                   {currentTrack.categoryLabel}
                 </p>
               </div>
 
-              {/* Progress Slider */}
-              <div className="w-full mb-8">
+              <div className="w-full mb-10 px-2">
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={progress}
                   onChange={handleSeek}
-                  className="w-full h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                  className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-accent ${isDarkMode ? 'bg-white/10' : 'bg-black/10'}`}
                 />
-                <div className="flex justify-between mt-3 text-[10px] font-mono text-white/30">
+                <div className={`flex justify-between mt-4 text-xs font-mono font-medium opacity-30`}>
                   <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
                   <span>{formatTime(audioRef.current?.duration || 0)}</span>
                 </div>
               </div>
 
-              {/* Controls */}
               <div className="w-full flex items-center justify-between px-2">
-                <button className="text-white/40 hover:text-white transition-colors">
+                <button className="opacity-40 hover:opacity-100 transition-opacity">
                   <LayoutGrid className="w-5 h-5" />
                 </button>
                 
-                <div className="flex items-center gap-8">
+                <div className="flex items-center gap-6">
                   <button 
                     onClick={handlePrev}
-                    className="p-4 bg-white/5 rounded-3xl text-white hover:bg-white/10 transition-all border border-white/5"
+                    className={`p-5 rounded-3xl transition-all border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}
                   >
                     <SkipBack className="w-6 h-6 fill-current" />
                   </button>
@@ -422,43 +490,84 @@ export default function App() {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={togglePlay}
-                    className="w-20 h-20 bg-orange-500 rounded-full flex items-center justify-center text-black shadow-xl shadow-orange-600/40 relative group"
+                    className="w-20 h-20 bg-accent rounded-full flex items-center justify-center text-white shadow-xl relative group"
+                    style={{ backgroundColor: 'var(--accent-color)', boxShadow: `0 20px 25px -5px var(--accent-soft)` }}
                   >
-                    <div className="absolute inset-0 bg-orange-400 rounded-full scale-100 group-hover:scale-110 opacity-0 group-hover:opacity-100 transition-all" />
+                    <div className="absolute inset-0 bg-white/20 rounded-full scale-100 group-hover:scale-110 opacity-0 group-hover:opacity-100 transition-all" />
                     {isPlaying ? <Pause className="w-8 h-8 relative" /> : <Play className="w-8 h-8 fill-current ml-1 relative" />}
                   </motion.button>
 
                   <button 
                     onClick={handleNext}
-                    className="p-4 bg-white/5 rounded-3xl text-white hover:bg-white/10 transition-all border border-white/5"
+                    className={`p-5 rounded-3xl transition-all border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}
                   >
                     <SkipForward className="w-6 h-6 fill-current" />
                   </button>
                 </div>
 
-                <div className="relative group">
-                  <button className="text-white/40 hover:text-white transition-colors">
-                    <Volume2 className="w-5 h-5" />
-                  </button>
-                </div>
+                <button className="opacity-40 hover:opacity-100 transition-opacity">
+                  <Volume2 className="w-5 h-5" />
+                </button>
               </div>
             </div>
 
-            <footer className="relative z-10 flex justify-center mt-12 gap-8 opacity-40">
+            <footer className={`relative z-10 flex justify-center mt-12 gap-8 opacity-40`}>
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span className="text-[10px] font-mono">وخت ختم شو</span>
+                <span className="text-[10px] font-mono font-bold tracking-tight">وخت تېر شو</span>
               </div>
               <div className="flex items-center gap-2">
                 <ListIcon className="w-4 h-4" />
-                <span className="text-[10px] font-mono">راتلونکی</span>
+                <span className="text-[10px] font-mono font-bold tracking-tight">اضافه شوي</span>
               </div>
             </footer>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Hidden Audio Element */}
+      {/* Theme Picker Modal */}
+      <AnimatePresence>
+        {showThemePicker && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowThemePicker(false)}
+              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-[90%] max-w-sm rounded-[3rem] p-8 shadow-2xl border ${isDarkMode ? 'bg-[#1a1614] border-white/10' : 'bg-white border-black/10'}`}
+            >
+              <h3 className="text-xl font-bold mb-6 text-center">رنګ غوره کړئ</h3>
+              <div className="grid grid-cols-5 gap-4">
+                {ACCENT_THEMES.map((theme) => (
+                  <motion.button
+                    key={theme.id}
+                    whileHover={{ scale: 1.15 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={() => { setAccentTheme(theme.id); setShowThemePicker(false); }}
+                    className={`aspect-square rounded-2xl flex items-center justify-center border-4 transition-all ${accentTheme === theme.id ? 'border-white ring-4 ring-orange-500/20' : 'border-transparent'}`}
+                    style={{ backgroundColor: theme.color }}
+                  >
+                    {accentTheme === theme.id && <div className="w-2 h-2 bg-white rounded-full" />}
+                  </motion.button>
+                ))}
+              </div>
+              <button 
+                onClick={() => setShowThemePicker(false)}
+                className="w-full mt-8 py-4 bg-orange-600/10 text-orange-500 font-bold rounded-2xl hover:bg-orange-600/20 transition-all"
+              >
+                بندول
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       <audio
         ref={audioRef}
         src={currentTrack?.url}
@@ -480,20 +589,22 @@ export default function App() {
         input[type='range']::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          width: 14px;
-          height: 14px;
-          background: #f97316;
+          width: 16px;
+          height: 16px;
+          background: var(--accent-color);
           border-radius: 50%;
           cursor: pointer;
-          border: 2px solid #000;
+          border: 3px solid ${isDarkMode ? '#0a0502' : '#fdf8f5'};
+          box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         input[type='range']::-moz-range-thumb {
-          width: 14px;
-          height: 14px;
-          background: #f97316;
+          width: 16px;
+          height: 16px;
+          background: var(--accent-color);
           border-radius: 50%;
           cursor: pointer;
-          border: 2px solid #000;
+          border: 3px solid ${isDarkMode ? '#0a0502' : '#fdf8f5'};
+          box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
       `}</style>
     </div>

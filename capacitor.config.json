@@ -1,0 +1,12 @@
+{
+  "appId": "com.pashto.player.app",
+  "appName": "د پښتو غږیز پلیر",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "StatusBar": {
+      "overlaysWebView": true,
+      "style": "DARK"
+    }
+  }
+}

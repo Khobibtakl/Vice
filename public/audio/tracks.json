@@ -1,12 +1,112 @@
 [
   {
-    "id": "local-1",
-    "title": "لومړۍ نمونه يي وینا",
-    "artist": "شیخ صاحب",
+    "id": "1",
+    "title": "د اخلاقو ښکلا",
+    "artist": "شیخ الحدیث صېب",
     "category": "speeches",
     "categoryLabel": "اسلامي ویناوې",
-    "filename": "sample.mp3",
+    "filename": "1.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
     "thumbnail": "https://images.unsplash.com/photo-1507676184212-d03ab07a01bf?auto=format&fit=crop&q=80&w=400",
-    "duration": "00:00"
+    "duration": "06:12"
+  },
+  {
+    "id": "2",
+    "title": "د لمانځه فضیلت",
+    "artist": "مفتي صېب",
+    "category": "speeches",
+    "categoryLabel": "اسلامي ویناوې",
+    "filename": "2.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1542810634-71277d95dcbb?auto=format&fit=crop&q=80&w=400",
+    "duration": "08:45"
+  },
+  {
+    "id": "3",
+    "title": "د قران کریم لومړی درس",
+    "artist": "استاد عبدالله",
+    "category": "lessons",
+    "categoryLabel": "درسونه",
+    "filename": "3.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1544273677-242ab23750fb?auto=format&fit=crop&q=80&w=400",
+    "duration": "12:10"
+  },
+  {
+    "id": "4",
+    "title": "نبي ع ته سلام",
+    "artist": "قاري احمد",
+    "category": "naats",
+    "categoryLabel": "نعتونه",
+    "filename": "4.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1519730722595-a5ff788dea4d?auto=format&fit=crop&q=80&w=400",
+    "duration": "04:30"
+  },
+  {
+    "id": "5",
+    "title": "د مور او پلار قدر",
+    "artist": "شیخ الحدیث صېب",
+    "category": "speeches",
+    "categoryLabel": "اسلامي ویناوې",
+    "filename": "5.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-5.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1524230507669-5ff97982bb5e?auto=format&fit=crop&q=80&w=400",
+    "duration": "10:20"
+  },
+  {
+    "id": "6",
+    "title": "د روژې احکام",
+    "artist": "مفتي صېب",
+    "category": "lessons",
+    "categoryLabel": "درسونه",
+    "filename": "6.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1589156206699-bc21e3305600?auto=format&fit=crop&q=80&w=400",
+    "duration": "15:45"
+  },
+  {
+    "id": "7",
+    "title": "مدینه منوره",
+    "artist": "قاري احمد",
+    "category": "naats",
+    "categoryLabel": "نعتونه",
+    "filename": "7.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1493225255756-d9584f8606e9?auto=format&fit=crop&q=80&w=400",
+    "duration": "05:15"
+  },
+  {
+    "id": "8",
+    "title": "د مرګ یاد",
+    "artist": "شیخ الحدیث صېب",
+    "category": "speeches",
+    "categoryLabel": "اسلامي ویناوې",
+    "filename": "8.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&q=80&w=400",
+    "duration": "07:50"
+  },
+  {
+    "id": "9",
+    "title": "تجوید القران - ۲",
+    "artist": "استاد عبدالله",
+    "category": "lessons",
+    "categoryLabel": "درسونه",
+    "filename": "9.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=400",
+    "duration": "14:20"
+  },
+  {
+    "id": "10",
+    "title": "اصحاب کهف قیصه",
+    "artist": "مفتي صېب",
+    "category": "lessons",
+    "categoryLabel": "درسونه",
+    "filename": "10.mp3",
+    "url": "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3",
+    "thumbnail": "https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?auto=format&fit=crop&q=80&w=400",
+    "duration": "22:15"
   }
 ]
