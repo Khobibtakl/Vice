@@ -1,6 +1,8 @@
 {
-  "name": "د پښتو غږیز پلیر (Pashto Audio Player)",
-  "description": "یو ساده او چټک اپلیکیشن د دیني ویناوو، درسونو او نعتونو د اورېدلو لپاره چې پرته له انټرنېټ کار کوي.",
+  "name": "شرعي مسايلو حل",
+  "description": "د محترم مفتي محمد آصف مبارز صاحب غږیز جوابونه د شرعي مسایلو د حل په اړه. دا اپلیکیشن په افلاین ډول کار کوي.",
   "requestFramePermissions": [],
-  "majorCapabilities": []
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

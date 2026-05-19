@@ -15,7 +15,15 @@ import {
   Music4,
   Sun,
   Moon,
-  Palette
+  Palette,
+  ArrowUpDown,
+  Info,
+  MessageCircle,
+  Phone,
+  Facebook,
+  Mail,
+  Send,
+  User2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_TRACKS, CATEGORIES, AudioTrack } from './constants';
@@ -51,7 +59,10 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [accentTheme, setAccentTheme] = useState('default');
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [showContact, setShowContact] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [sortBy, setSortBy] = useState<'title' | 'artist' | 'default'>('default');
   const [showSplash, setShowSplash] = useState(true);
 
   // Refs
@@ -89,8 +100,6 @@ export default function App() {
       } else if (activeCategory !== 'all' || searchQuery !== '') {
         setActiveCategory('all');
         setSearchQuery('');
-      } else {
-        // Option to minimize or exit on double tap
       }
     });
 
@@ -101,6 +110,7 @@ export default function App() {
 
   // Formatted time
   const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return '00:00';
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -113,45 +123,47 @@ export default function App() {
         const response = await fetch('/audio/tracks.json');
         const data = await response.json();
         
-        const mappedData = await Promise.all(data.map(async (track: any, index: number) => {
-          const trackId = track.id || `track-${index}`;
-          const url = track.url || `/audio/${track.filename}`;
-          
-          let duration = track.duration || '00:00';
-          let thumbnail = track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400';
-          
-          // Try to extract metadata if not provided
-          try {
-            const blobResponse = await fetch(url);
-            const blob = await blobResponse.blob();
-            const metadata = await mmb.parseBlob(blob);
-            
-            if (metadata.format.duration) {
-              duration = formatTime(metadata.format.duration);
-            }
-            
-            if (metadata.common.picture && metadata.common.picture.length > 0) {
-              const pic = metadata.common.picture[0];
-              const picBlob = new Blob([pic.data], { type: pic.format });
-              thumbnail = URL.createObjectURL(picBlob);
-            }
-          } catch (e) {
-            console.warn(`Could not load metadata for ${track.filename}`, e);
-          }
-
-          return {
-            ...track,
-            id: trackId,
-            url,
-            duration,
-            thumbnail,
-            categoryLabel: CATEGORIES.find(c => c.id === track.category)?.label || 'متفرقه'
-          };
+        // Initial mapping with default thumbnails
+        const mappedData = data.map((track: any, index: number) => ({
+          ...track,
+          id: track.id || `track-${index}`,
+          url: track.url || `/audio/${track.filename}`,
+          filename: track.filename || track.url?.split('/').pop() || '',
+          duration: track.duration || '00:00',
+          thumbnail: track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400',
+          categoryLabel: CATEGORIES.find(c => c.id === track.category)?.label || 'متفرقه'
         }));
 
         setTracks(mappedData);
 
-        // Persistence
+        // Lazily extract metadata for each track
+        mappedData.forEach(async (track: AudioTrack, idx: number) => {
+          try {
+            const blobResponse = await fetch(track.url);
+            const blob = await blobResponse.blob();
+            const metadata = await mmb.parseBlob(blob);
+            
+            setTracks(prev => prev.map(t => {
+              if (t.id === track.id) {
+                let updatedThumb = t.thumbnail;
+                if (metadata.common.picture && metadata.common.picture.length > 0) {
+                  const pic = metadata.common.picture[0];
+                  const picBlob = new Blob([pic.data], { type: pic.format });
+                  updatedThumb = URL.createObjectURL(picBlob);
+                }
+                return {
+                  ...t,
+                  duration: metadata.format.duration ? formatTime(metadata.format.duration) : t.duration,
+                  thumbnail: updatedThumb
+                };
+              }
+              return t;
+            }));
+          } catch (e) {
+            console.warn(`Metadata failed for ${track.url}`, e);
+          }
+        });
+
         const savedFavorites = localStorage.getItem('pashto_player_favorites');
         if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
 
@@ -165,18 +177,12 @@ export default function App() {
         if (savedViewMode) setViewMode(savedViewMode);
 
         const lastTrackId = localStorage.getItem('pashto_player_last_track');
-        const lastProgress = localStorage.getItem('pashto_player_last_progress');
-        
         if (lastTrackId) {
           const track = mappedData.find((t: AudioTrack) => t.id === lastTrackId);
-          if (track) {
-            setCurrentTrack(track);
-            if (lastProgress) setProgress(parseFloat(lastProgress));
-          }
+          if (track) setCurrentTrack(track);
         }
 
-        // Keep splash for a bit to feel premium
-        setTimeout(() => setShowSplash(false), 1500);
+        setTimeout(() => setShowSplash(false), 2000);
       } catch (error) {
         console.error("Error loading tracks:", error);
         setShowSplash(false);
@@ -275,15 +281,23 @@ export default function App() {
     );
   };
 
-  // Filtered tracks
+  // Filtered and sorted tracks
   const filteredTracks = useMemo(() => {
-    return tracks.filter(track => {
+    let result = tracks.filter(track => {
       const matchesCategory = activeCategory === 'all' || track.category === activeCategory;
       const matchesSearch = track.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            track.artist.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery, tracks]);
+
+    if (sortBy === 'title') {
+      result = [...result].sort((a, b) => a.title.localeCompare(b.title));
+    } else if (sortBy === 'artist') {
+      result = [...result].sort((a, b) => a.artist.localeCompare(b.artist));
+    }
+
+    return result;
+  }, [activeCategory, searchQuery, tracks, sortBy]);
 
   return (
     <div className="min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center" dir="rtl">
@@ -297,10 +311,36 @@ export default function App() {
         {/* Header */}
         <header className="flex items-center justify-between mb-8 mt-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-1">صوتي فایلونه</h1>
-            <p className={`text-[10px] uppercase tracking-widest font-mono opacity-50`}>اسلامي غږیز پلیر</p>
+            <h1 className="text-2xl font-bold tracking-tight mb-1">شرعي مسايلو حل</h1>
+            <p className={`text-[10px] uppercase tracking-widest font-mono opacity-50`}>مفتي محمد آصف مبارز</p>
           </div>
           <div className="flex gap-2">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowContact(true)}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+            >
+              <MessageCircle className="w-5 h-5" />
+            </motion.button>
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setShowInfo(true)}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+            >
+              <Info className="w-5 h-5" />
+            </motion.button>
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => {
+                const sorts: ('default' | 'title' | 'artist')[] = ['default', 'title', 'artist'];
+                const next = sorts[(sorts.indexOf(sortBy) + 1) % sorts.length];
+                setSortBy(next);
+              }}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'} ${sortBy !== 'default' ? 'text-accent border-accent' : ''}`}
+              style={sortBy !== 'default' ? { color: 'var(--accent-color)', borderColor: 'var(--accent-color)' } : {}}
+            >
+              <ArrowUpDown className="w-5 h-5" />
+            </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
@@ -410,9 +450,13 @@ export default function App() {
               
               <div className={`flex-1 min-w-0 ${viewMode === 'grid' ? 'p-3' : ''}`}>
                 <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
-                  {track.title}
+                  {track.title || track.filename}
                 </h3>
-                <p className={`text-xs truncate mt-0.5 opacity-40`}>{track.artist} • {track.categoryLabel}</p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className={`text-[10px] truncate opacity-40`}>{track.artist}</p>
+                  <span className="text-[10px] opacity-20">•</span>
+                  <p className="text-[10px] opacity-30 font-mono">{track.filename}</p>
+                </div>
               </div>
 
               {viewMode === 'list' && (
@@ -638,10 +682,183 @@ export default function App() {
               </div>
               <button 
                 onClick={() => setShowThemePicker(false)}
-                className="w-full mt-8 py-4 bg-orange-600/10 text-orange-500 font-bold rounded-2xl hover:bg-orange-600/20 transition-all"
+                className="w-full mt-8 py-4 bg-orange-600/10 text-orange-500 font-bold rounded-2xl hover:bg-orange-600/20 transition-all font-mono"
               >
                 بندول
               </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Info Modal */}
+      <AnimatePresence>
+        {showInfo && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowInfo(false)}
+              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-[90%] max-w-sm rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col ${isDarkMode ? 'bg-[#1a1614] border-white/10' : 'bg-white border-black/10'}`}
+            >
+              <div className="p-8 pb-4 overflow-y-auto max-h-[70vh] no-scrollbar">
+                <div className="flex flex-col items-center mb-6">
+                   <div className="w-16 h-16 bg-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-500/20 mb-4">
+                     <Music4 className="w-8 h-8 text-white" />
+                   </div>
+                   <h3 className="text-xl font-bold">د کاريال په اړه</h3>
+                   <p className="text-[10px] opacity-40 uppercase tracking-widest mt-1">About Application</p>
+                </div>
+
+                <div className="space-y-4 text-right">
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">📱 نوم:</p>
+                    <p className="text-sm font-bold">شرعي مسايلو حل</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🎙 جوابونکي:</p>
+                    <p className="text-sm font-bold">محترم مفتي محمد آصف مبارز صاحب</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🔢 ورژن:</p>
+                    <p className="text-sm font-bold">لومړی (1.0.0)</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🎧 بڼه:</p>
+                    <p className="text-sm font-bold">غږيز جوابونه</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">📚 برخې:</p>
+                    <p className="text-sm font-bold">ټولې ۵۰ برخې</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">👨💻 جوړوونکی:</p>
+                    <p className="text-sm font-bold">طالب العلم خبيب تکل</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🗂 ترتيب کوونکی:</p>
+                    <p className="text-sm font-bold">الحاج داکتر فريدون احرار</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🤝 مرسته کوونکی:</p>
+                    <p className="text-sm font-bold">عبدالستار سعيد صاحب</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                    <p className="text-[10px] opacity-40 mb-1">🏢 اداره:</p>
+                    <p className="text-sm font-bold">د اسلامي کاريالونو څانګه</p>
+                  </div>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-orange-500/5 border-orange-500/20' : 'bg-orange-500/5 border-orange-500/10'}`}>
+                    <p className="text-[10px] text-orange-500 mb-1">🔐 امنیت:</p>
+                    <p className="text-[10px] leading-relaxed">ددې اپلېکېشن ټولې مهمې برخې د AES رمزګذاري پواسطه رمز (کوډ) شوي.</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-8 pt-0">
+                <button 
+                  onClick={() => setShowInfo(false)}
+                  className="w-full py-4 bg-orange-600/10 text-orange-500 font-bold rounded-2xl hover:bg-orange-600/20 transition-all font-mono"
+                >
+                  بندول
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Contact Modal */}
+      <AnimatePresence>
+        {showContact && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowContact(false)}
+              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-[90%] max-w-sm rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col ${isDarkMode ? 'bg-[#1a1614] border-white/10' : 'bg-white border-black/10'}`}
+            >
+              <div className="p-8 pb-4 overflow-y-auto max-h-[70vh] no-scrollbar">
+                <div className="flex flex-col items-center mb-6">
+                   <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/20 mb-4">
+                     <User2 className="w-8 h-8 text-white" />
+                   </div>
+                   <h3 className="text-xl font-bold">جوړونکي سره اړیکه</h3>
+                   <p className="text-[10px] opacity-40 uppercase tracking-widest mt-1">Contact Developer</p>
+                </div>
+
+                <div className="space-y-3">
+                  <a href="https://t.me/khubaib_takl" target="_blank" rel="noopener noreferrer" className={`flex items-center p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10'}`}>
+                    <div className="w-10 h-10 bg-sky-500/20 text-sky-500 rounded-xl flex items-center justify-center ml-4">
+                      <Send className="w-5 h-5" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <p className="text-[10px] opacity-40">تلګرام ادرس</p>
+                      <p className="text-sm font-bold">@khubaib_takl</p>
+                    </div>
+                  </a>
+
+                  <a href="https://wa.me/93765443156" target="_blank" rel="noopener noreferrer" className={`flex items-center p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10'}`}>
+                    <div className="w-10 h-10 bg-green-500/20 text-green-500 rounded-xl flex items-center justify-center ml-4">
+                      <MessageCircle className="w-5 h-5" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <p className="text-[10px] opacity-40">وتساپ ادرس</p>
+                      <p className="text-sm font-bold">+93765443156</p>
+                    </div>
+                  </a>
+
+                  <a href="https://www.facebook.com/khobaib.takal." target="_blank" rel="noopener noreferrer" className={`flex items-center p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10'}`}>
+                    <div className="w-10 h-10 bg-blue-600/20 text-blue-600 rounded-xl flex items-center justify-center ml-4">
+                      <Facebook className="w-5 h-5" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <p className="text-[10px] opacity-40">فیسبوک ادرس</p>
+                      <p className="text-sm font-bold">طالب العلم خبيب تکل</p>
+                    </div>
+                  </a>
+
+                  <a href="tel:0777233699" className={`flex items-center p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10'}`}>
+                    <div className="w-10 h-10 bg-orange-500/20 text-orange-500 rounded-xl flex items-center justify-center ml-4">
+                      <Phone className="w-5 h-5" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <p className="text-[10px] opacity-40">تلفوني اړیکه</p>
+                      <p className="text-sm font-bold">0777233699</p>
+                    </div>
+                  </a>
+
+                  <a href="mailto:khobibtakl@gmail.com" className={`flex items-center p-4 rounded-2xl border transition-all ${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10'}`}>
+                    <div className="w-10 h-10 bg-red-500/20 text-red-500 rounded-xl flex items-center justify-center ml-4">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <div className="text-right flex-1">
+                      <p className="text-[10px] opacity-40">جمیل ادرس</p>
+                      <p className="text-sm font-bold">khobibtakl@gmail.com</p>
+                    </div>
+                  </a>
+                </div>
+              </div>
+              <div className="p-8 pt-0">
+                <button 
+                  onClick={() => setShowContact(false)}
+                  className="w-full py-4 bg-blue-600/10 text-blue-500 font-bold rounded-2xl hover:bg-blue-600/20 transition-all font-mono"
+                >
+                  بندول
+                </button>
+              </div>
             </motion.div>
           </>
         )}
@@ -678,7 +895,7 @@ export default function App() {
               transition={{ delay: 0.5 }}
               className="mt-10 text-3xl font-bold tracking-tight"
             >
-              د پښتو غږیز پلیر
+              شرعي مسايلو حل
             </motion.h2>
             <motion.p
               initial={{ opacity: 0 }}
@@ -686,8 +903,17 @@ export default function App() {
               transition={{ delay: 0.7 }}
               className="mt-2 text-sm font-mono uppercase tracking-[0.3em]"
             >
-              Pashto Audio Player
+              مفتي محمد آصف مبارز
             </motion.p>
+
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 0.6, y: 0 }}
+              transition={{ delay: 1 }}
+              className="mt-4 flex flex-col items-center"
+            >
+              <p className="text-[10px] uppercase tracking-widest font-bold">جوړونکی: طالب العلم خبیب تکل</p>
+            </motion.div>
             
             <div className="absolute bottom-16 flex flex-col items-center gap-4">
               <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">

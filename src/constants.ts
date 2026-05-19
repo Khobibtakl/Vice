@@ -10,15 +10,14 @@ export interface AudioTrack {
   categoryLabel: string;
   artist: string;
   url: string;
+  filename?: string;
   duration?: string;
   thumbnail?: string;
 }
 
 export const CATEGORIES = [
-  { id: 'all', label: 'ټول' },
-  { id: 'speeches', label: 'اسلامي ویناوې' },
-  { id: 'lessons', label: 'درسونه' },
-  { id: 'naats', label: 'نعتونه' },
+  { id: 'all', label: 'ټولې ۵۰ برخې' },
+  { id: 'lessons', label: 'شرعي جوابونه' },
 ] as const;
 
 export const INITIAL_TRACKS: AudioTrack[] = [];
