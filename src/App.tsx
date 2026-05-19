@@ -11,6 +11,7 @@ import {
   ChevronDown,
   LayoutGrid,
   List as ListIcon,
+  LayoutList,
   Music4,
   Sun,
   Moon,
@@ -20,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_TRACKS, CATEGORIES, AudioTrack } from './constants';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import * as mmb from 'music-metadata-browser';
 
 const ACCENT_THEMES = [
   { id: 'default', color: '#f97316' },
@@ -49,6 +51,8 @@ export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [accentTheme, setAccentTheme] = useState('default');
   const [showThemePicker, setShowThemePicker] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [showSplash, setShowSplash] = useState(true);
 
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -95,18 +99,59 @@ export default function App() {
     };
   }, [showFullPlayer, activeCategory, searchQuery, showThemePicker]);
 
+  // Formatted time
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   // Load persistence and fetch tracks
   useEffect(() => {
     const loadApp = async () => {
       try {
         const response = await fetch('/audio/tracks.json');
         const data = await response.json();
-        const mappedData = data.map((track: any) => ({
-          ...track,
-          url: track.url || `/audio/${track.filename}`
+        
+        const mappedData = await Promise.all(data.map(async (track: any, index: number) => {
+          const trackId = track.id || `track-${index}`;
+          const url = track.url || `/audio/${track.filename}`;
+          
+          let duration = track.duration || '00:00';
+          let thumbnail = track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400';
+          
+          // Try to extract metadata if not provided
+          try {
+            const blobResponse = await fetch(url);
+            const blob = await blobResponse.blob();
+            const metadata = await mmb.parseBlob(blob);
+            
+            if (metadata.format.duration) {
+              duration = formatTime(metadata.format.duration);
+            }
+            
+            if (metadata.common.picture && metadata.common.picture.length > 0) {
+              const pic = metadata.common.picture[0];
+              const picBlob = new Blob([pic.data], { type: pic.format });
+              thumbnail = URL.createObjectURL(picBlob);
+            }
+          } catch (e) {
+            console.warn(`Could not load metadata for ${track.filename}`, e);
+          }
+
+          return {
+            ...track,
+            id: trackId,
+            url,
+            duration,
+            thumbnail,
+            categoryLabel: CATEGORIES.find(c => c.id === track.category)?.label || 'متفرقه'
+          };
         }));
+
         setTracks(mappedData);
 
+        // Persistence
         const savedFavorites = localStorage.getItem('pashto_player_favorites');
         if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
 
@@ -115,6 +160,9 @@ export default function App() {
 
         const savedAccent = localStorage.getItem('pashto_player_accent');
         if (savedAccent) setAccentTheme(savedAccent);
+
+        const savedViewMode = localStorage.getItem('pashto_player_view_mode') as 'list' | 'grid' | null;
+        if (savedViewMode) setViewMode(savedViewMode);
 
         const lastTrackId = localStorage.getItem('pashto_player_last_track');
         const lastProgress = localStorage.getItem('pashto_player_last_progress');
@@ -126,8 +174,12 @@ export default function App() {
             if (lastProgress) setProgress(parseFloat(lastProgress));
           }
         }
+
+        // Keep splash for a bit to feel premium
+        setTimeout(() => setShowSplash(false), 1500);
       } catch (error) {
         console.error("Error loading tracks:", error);
+        setShowSplash(false);
       } finally {
         setLoading(false);
       }
@@ -147,6 +199,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('pashto_player_accent', accentTheme);
   }, [accentTheme]);
+
+  useEffect(() => {
+    localStorage.setItem('pashto_player_view_mode', viewMode);
+  }, [viewMode]);
 
   // Handle Play/Pause
   const togglePlay = () => {
@@ -229,13 +285,6 @@ export default function App() {
     });
   }, [activeCategory, searchQuery, tracks]);
 
-  // Formatted time
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
     <div className="min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center" dir="rtl">
       {/* Background Atmosphere */}
@@ -252,6 +301,13 @@ export default function App() {
             <p className={`text-[10px] uppercase tracking-widest font-mono opacity-50`}>اسلامي غږیز پلیر</p>
           </div>
           <div className="flex gap-2">
+            <motion.button 
+              whileTap={{ scale: 0.9 }}
+              onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
+              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+            >
+              {viewMode === 'list' ? <LayoutGrid className="w-5 h-5" /> : <LayoutList className="w-5 h-5" />}
+            </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowThemePicker(!showThemePicker)}
@@ -304,9 +360,9 @@ export default function App() {
         </div>
 
         {/* List Body */}
-        <div className="flex-1 overflow-y-auto space-y-3 no-scrollbar pr-1 pb-4">
+        <div className={`flex-1 overflow-y-auto no-scrollbar pr-1 pb-4 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-4 space-y-0' : 'space-y-3'}`}>
           {loading ? (
-             <div className="flex justify-center py-10">
+             <div className="flex justify-center py-10 col-span-full">
                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
                  <Music4 className="w-6 h-6 opacity-30" style={{ color: 'var(--accent-color)' }} />
                </motion.div>
@@ -314,19 +370,23 @@ export default function App() {
           ) : filteredTracks.map((track, idx) => (
             <motion.div
               layout
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: idx * 0.03 }}
               key={track.id}
               onClick={() => handleTrackSelect(track)}
-              className={`group relative flex items-center p-3 rounded-2xl transition-all cursor-pointer border ${
+              className={`group relative transition-all cursor-pointer border overflow-hidden ${
+                viewMode === 'grid' 
+                ? 'flex flex-col rounded-3xl p-0' 
+                : 'flex items-center p-3 rounded-2xl'
+              } ${
                 currentTrack?.id === track.id
                   ? 'bg-accent-soft border-accent'
                   : `${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10 hover:border-black/10'}`
               }`}
               style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}
             >
-              <div className="relative w-12 h-12 rounded-xl overflow-hidden ml-3 flex-shrink-0">
+              <div className={`${viewMode === 'grid' ? 'w-full aspect-square relative' : 'relative w-12 h-12 rounded-xl overflow-hidden ml-3 flex-shrink-0'}`}>
                 <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
                 {currentTrack?.id === track.id && isPlaying && (
                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
@@ -337,27 +397,46 @@ export default function App() {
                     </div>
                   </div>
                 )}
+                {viewMode === 'grid' && (
+                  <button 
+                    onClick={(e) => toggleFavorite(track.id, e)}
+                    className={`absolute top-3 left-3 p-2 rounded-full backdrop-blur-md bg-black/20 transition-all ${favorites.includes(track.id) ? 'text-accent' : 'text-white/40 hover:text-white'}`}
+                    style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                  >
+                    <Heart className={`w-3.5 h-3.5 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
+                  </button>
+                )}
               </div>
               
-              <div className="flex-1 min-w-0">
+              <div className={`flex-1 min-w-0 ${viewMode === 'grid' ? 'p-3' : ''}`}>
                 <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
                   {track.title}
                 </h3>
                 <p className={`text-xs truncate mt-0.5 opacity-40`}>{track.artist} • {track.categoryLabel}</p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
-                <button 
-                  onClick={(e) => toggleFavorite(track.id, e)}
-                  className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
-                  style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
-                >
-                  <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
-                </button>
-              </div>
+              {viewMode === 'list' && (
+                <div className="flex items-center gap-3">
+                  <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
+                  <button 
+                    onClick={(e) => toggleFavorite(track.id, e)}
+                    className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
+                    style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                  >
+                    <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
+              )}
             </motion.div>
           ))}
+          {!loading && filteredTracks.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 opacity-40 col-span-full">
+              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-4">
+                <Search className="w-6 h-6" />
+              </div>
+              <p className="text-sm">هیڅ فایل ونه موندل شو</p>
+            </div>
+          )}
         </div>
       </main>
 
@@ -565,6 +644,63 @@ export default function App() {
               </button>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Splash Screen */}
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.8, ease: 'easeInOut' }}
+            className="fixed inset-0 z-[100] bg-[#0a0502] flex flex-col items-center justify-center text-white"
+          >
+            <motion.div
+              initial={{ scale: 0.8, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="relative"
+            >
+              <div className="w-24 h-24 bg-orange-500 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-orange-500/20 rotate-12">
+                <Music4 className="w-12 h-12 text-white -rotate-12" />
+              </div>
+              <motion.div 
+                animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="absolute inset-0 bg-orange-500 rounded-[2rem] blur-2xl -z-10"
+              />
+            </motion.div>
+            
+            <motion.h2 
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="mt-10 text-3xl font-bold tracking-tight"
+            >
+              د پښتو غږیز پلیر
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              transition={{ delay: 0.7 }}
+              className="mt-2 text-sm font-mono uppercase tracking-[0.3em]"
+            >
+              Pashto Audio Player
+            </motion.p>
+            
+            <div className="absolute bottom-16 flex flex-col items-center gap-4">
+              <div className="w-48 h-1 bg-white/5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ x: '-100%' }}
+                  animate={{ x: '100%' }}
+                  transition={{ repeat: Infinity, duration: 1.5, ease: 'linear' }}
+                  className="w-1/2 h-full bg-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.8)]"
+                />
+              </div>
+              <p className="text-[10px] opacity-30 font-medium">ښه راغلاست...</p>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
