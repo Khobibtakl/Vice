@@ -123,16 +123,35 @@ export default function App() {
         const response = await fetch('/audio/tracks.json');
         const data = await response.json();
         
-        // Initial mapping with default thumbnails
-        const mappedData = data.map((track: any, index: number) => ({
-          ...track,
-          id: track.id || `track-${index}`,
-          url: track.url || `/audio/${track.filename}`,
-          filename: track.filename || track.url?.split('/').pop() || '',
-          duration: track.duration || '00:00',
-          thumbnail: track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400',
-          categoryLabel: CATEGORIES.find(c => c.id === track.category)?.label || 'متفرقه'
-        }));
+        // Helper to format beautiful Pashto titles from filenames like '1.mp3' or '1'
+        const formatTitleFromFilename = (filename: string) => {
+          const cleanName = filename.replace(/\.[^/.]+$/, ""); // strip extension
+          const num = parseInt(cleanName, 10);
+          if (!isNaN(num)) {
+            return `${num} برخه - شرعي پوښتنه`;
+          }
+          return cleanName;
+        };
+
+        // Initial mapping with robust support for array of strings or simple objects
+        const mappedData = (Array.isArray(data) ? data : []).map((track: any, index: number) => {
+          const isString = typeof track === 'string';
+          const filename = isString ? track : (track?.filename || track?.url?.split('/').pop() || `track-${index}.mp3`);
+          const title = isString ? formatTitleFromFilename(filename) : (track?.title || formatTitleFromFilename(filename));
+          const category = isString ? 'lessons' : (track?.category || 'lessons');
+
+          return {
+            id: isString ? `track-${index}` : (track.id || `track-${index}`),
+            title: title,
+            category: category,
+            artist: isString ? 'مفتي محمد آصف مبارز' : (track.artist || 'مفتي محمد آصف مبارز'),
+            url: isString ? `/audio/${filename}` : (track.url || `/audio/${filename}`),
+            filename: filename,
+            duration: isString ? '00:00' : (track.duration || '00:00'),
+            thumbnail: isString ? 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400' : (track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400'),
+            categoryLabel: CATEGORIES.find(c => c.id === category)?.label || 'شرعي جوابونه'
+          };
+        });
 
         setTracks(mappedData);
 
