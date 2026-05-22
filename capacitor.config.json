@@ -1,6 +1,6 @@
 {
-  "appId": ".khubaibtakl.vaice.af",
-  "appName": "  فقهي مسائل ",
+  "appId": "com.pashto.player.app",
+  "appName": "د پښتو غږیز پلیر",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "plugins": {

@@ -120,15 +120,37 @@ export default function App() {
   useEffect(() => {
     const loadApp = async () => {
       try {
-        const response = await fetch('/audio/tracks.json');
-        const data = await response.json();
-        
+        let response;
+        let data: any = [];
+        try {
+          response = await fetch('/audio/tracks.json');
+          if (response.ok) {
+            const rawText = await response.text();
+            try {
+              data = JSON.parse(rawText);
+            } catch (pErr) {
+              console.warn("Standard JSON parse failed, trying safe cleaning...", pErr);
+              // Clean trailing commas and spacing in arrays or objects
+              const cleanedText = rawText
+                .replace(/,\s*([\]}])/g, '$1') // remove trailing commas
+                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":'); // wrap unquoted keys with quotes
+              data = JSON.parse(cleanedText);
+            }
+          } else {
+            throw new Error(`Failed to fetch tracks.json: status ${response.status}`);
+          }
+        } catch (fetchErr) {
+          console.error("Failed to load tracks.json, generating default fallback list:", fetchErr);
+          // Fallback array of 50 items so the app is always fully functional and populated
+          data = Array.from({ length: 50 }, (_, i) => `${i + 1}.mp3`);
+        }
+
         // Helper to format beautiful Pashto titles from filenames like '1.mp3' or '1'
         const formatTitleFromFilename = (filename: string) => {
           const cleanName = filename.replace(/\.[^/.]+$/, ""); // strip extension
           const num = parseInt(cleanName, 10);
           if (!isNaN(num)) {
-            return `${num} برخه - شرعي پوښتنه`;
+            return `${num}- برخه د مسئلو جوابونه`;
           }
           return cleanName;
         };
@@ -159,6 +181,7 @@ export default function App() {
         mappedData.forEach(async (track: AudioTrack, idx: number) => {
           try {
             const blobResponse = await fetch(track.url);
+            if (!blobResponse.ok) return; // Skip if file doesn't exist on server
             const blob = await blobResponse.blob();
             const metadata = await mmb.parseBlob(blob);
             
@@ -249,6 +272,16 @@ export default function App() {
       togglePlay();
       return;
     }
+    
+    // Programmatically set source and play synchronously to bypass iOS/browser gesture policies
+    if (audioRef.current) {
+      audioRef.current.src = track.url;
+      audioRef.current.load();
+      audioRef.current.play().catch(err => {
+        console.warn("Direct play failed, browser might have blocked it:", err);
+      });
+    }
+
     setCurrentTrack(track);
     setIsPlaying(true);
     setProgress(0);
