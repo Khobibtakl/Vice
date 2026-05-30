@@ -29,7 +29,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { INITIAL_TRACKS, CATEGORIES, AudioTrack } from './constants';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
-import * as mmb from 'music-metadata-browser';
 
 const ACCENT_THEMES = [
   { id: 'default', color: '#f97316' },
@@ -95,18 +94,24 @@ export default function App() {
     const handleBackButton = CapApp.addListener('backButton', () => {
       if (showThemePicker) {
         setShowThemePicker(false);
+      } else if (showInfo) {
+        setShowInfo(false);
+      } else if (showContact) {
+        setShowContact(false);
       } else if (showFullPlayer) {
         setShowFullPlayer(false);
       } else if (activeCategory !== 'all' || searchQuery !== '') {
         setActiveCategory('all');
         setSearchQuery('');
+      } else {
+        CapApp.exitApp().catch(() => {});
       }
     });
 
     return () => {
       handleBackButton.then(h => h.remove());
     };
-  }, [showFullPlayer, activeCategory, searchQuery, showThemePicker]);
+  }, [showFullPlayer, activeCategory, searchQuery, showThemePicker, showInfo, showContact]);
 
   // Formatted time
   const formatTime = (seconds: number) => {
@@ -123,7 +128,7 @@ export default function App() {
         let response;
         let data: any = [];
         try {
-          response = await fetch('/audio/tracks.json');
+          response = await fetch('audio/tracks.json');
           if (response.ok) {
             const rawText = await response.text();
             try {
@@ -167,7 +172,7 @@ export default function App() {
             title: title,
             category: category,
             artist: isString ? 'مفتي محمد آصف مبارز' : (track.artist || 'مفتي محمد آصف مبارز'),
-            url: isString ? `/audio/${filename}` : (track.url || `/audio/${filename}`),
+            url: isString ? `audio/${filename}` : (track.url || `audio/${filename}`),
             filename: filename,
             duration: isString ? '00:00' : (track.duration || '00:00'),
             thumbnail: isString ? 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400' : (track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400'),
@@ -176,35 +181,6 @@ export default function App() {
         });
 
         setTracks(mappedData);
-
-        // Lazily extract metadata for each track
-        mappedData.forEach(async (track: AudioTrack, idx: number) => {
-          try {
-            const blobResponse = await fetch(track.url);
-            if (!blobResponse.ok) return; // Skip if file doesn't exist on server
-            const blob = await blobResponse.blob();
-            const metadata = await mmb.parseBlob(blob);
-            
-            setTracks(prev => prev.map(t => {
-              if (t.id === track.id) {
-                let updatedThumb = t.thumbnail;
-                if (metadata.common.picture && metadata.common.picture.length > 0) {
-                  const pic = metadata.common.picture[0];
-                  const picBlob = new Blob([pic.data], { type: pic.format });
-                  updatedThumb = URL.createObjectURL(picBlob);
-                }
-                return {
-                  ...t,
-                  duration: metadata.format.duration ? formatTime(metadata.format.duration) : t.duration,
-                  thumbnail: updatedThumb
-                };
-              }
-              return t;
-            }));
-          } catch (e) {
-            console.warn(`Metadata failed for ${track.url}`, e);
-          }
-        });
 
         const savedFavorites = localStorage.getItem('pashto_player_favorites');
         if (savedFavorites) setFavorites(JSON.parse(savedFavorites));
@@ -261,9 +237,10 @@ export default function App() {
     if (isPlaying) {
       audioRef.current?.pause();
     } else {
-      audioRef.current?.play();
+      audioRef.current?.play().catch(err => {
+        console.warn("Playback toggle play failed:", err);
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   // Handle Track Selection
@@ -283,7 +260,6 @@ export default function App() {
     }
 
     setCurrentTrack(track);
-    setIsPlaying(true);
     setProgress(0);
     localStorage.setItem('pashto_player_last_track', track.id);
   };

@@ -57,11 +57,11 @@ body {
 .border-accent { border-color: var(--accent-color); }
 .bg-accent-soft { background-color: var(--accent-soft); }
 
-/* Ensure fixed overlays respect safe areas too */
+/* Ensure fixed overlays and main containers respect safe areas with robust fallbacks */
 .safe-area-top {
-  padding-top: env(safe-area-inset-top, 0px);
+  padding-top: calc(env(safe-area-inset-top, 24px) + 12px) !important;
 }
 
 .safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 16px) + 12px) !important;
 }
