@@ -55,7 +55,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showFullPlayer, setShowFullPlayer] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [accentTheme, setAccentTheme] = useState('default');
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
@@ -71,8 +71,21 @@ export default function App() {
   useEffect(() => {
     const root = window.document.documentElement;
     
-    // Initialize Capacitor Status Bar Overlay
-    StatusBar.setOverlaysWebView({ overlay: true }).catch(() => {});
+    // Determine the status bar background color based on light/dark mode theme
+    const statusBarColor = isDarkMode ? '#0a0502' : '#fdf8f5';
+
+    // 1. Dynamic Web Theme Color Meta updates
+    let themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (!themeMeta) {
+      themeMeta = document.createElement('meta');
+      themeMeta.setAttribute('name', 'theme-color');
+      document.head.appendChild(themeMeta);
+    }
+    themeMeta.setAttribute('content', statusBarColor);
+
+    // 2. Capacitor native status bar synchronization
+    StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+    StatusBar.setBackgroundColor({ color: statusBarColor }).catch(() => {});
 
     if (isDarkMode) {
       root.classList.remove('light');
@@ -328,34 +341,34 @@ export default function App() {
   }, [activeCategory, searchQuery, tracks, sortBy]);
 
   return (
-    <div className="min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center" dir="rtl">
+    <div className={`min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center w-full ${isDarkMode ? 'bg-[#0a0502] text-white' : 'bg-[#fdf8f5] text-[#1a1614]'}`} dir="rtl">
       {/* Background Atmosphere */}
       <div className="fixed inset-0 pointer-events-none z-0">
         <div className={`absolute inset-0 bg-radial-at-t transition-opacity duration-1000 ${isDarkMode ? 'opacity-60' : 'opacity-100'} blur-3xl`} style={{ backgroundImage: `radial-gradient(circle at top, var(--accent-soft), transparent)` }} />
       </div>
 
       {/* Main Content */}
-      <main className="relative z-10 w-full max-w-lg h-screen flex flex-col px-4 pt-4 pb-24 lg:pb-32 overflow-hidden safe-area-top">
+      <main className="relative z-10 w-full max-w-lg h-[100dvh] flex flex-col px-4 pt-4 overflow-hidden safe-area-top">
         {/* Header */}
-        <header className="flex items-center justify-between mb-8 mt-2">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight mb-1">شرعي مسايلو حل</h1>
-            <p className={`text-[10px] uppercase tracking-widest font-mono opacity-50`}>مفتي محمد آصف مبارز</p>
+        <header className="flex flex-col gap-4 mb-6 mt-2 text-center items-center justify-center">
+          <div className="flex flex-col items-center">
+            <h1 className="text-3xl font-extrabold tracking-tight mb-1 bg-gradient-to-r from-accent via-accent to-accent bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(to right, var(--accent-color), var(--accent-color))` }}>شرعي مسايلو حل</h1>
+            <p className={`text-[11px] uppercase tracking-[0.2em] font-semibold opacity-65`}>مفتي محمد آصف مبارز</p>
           </div>
-          <div className="flex gap-2">
+          <div className={`flex gap-1.5 p-1 rounded-2xl border backdrop-blur-md ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/5 hover:border-black/10'}`}>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowContact(true)}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
             >
-              <MessageCircle className="w-5 h-5" />
+              <MessageCircle className="w-[18px] h-[18px]" />
             </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowInfo(true)}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
             >
-              <Info className="w-5 h-5" />
+              <Info className="w-[18px] h-[18px]" />
             </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
@@ -364,47 +377,47 @@ export default function App() {
                 const next = sorts[(sorts.indexOf(sortBy) + 1) % sorts.length];
                 setSortBy(next);
               }}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'} ${sortBy !== 'default' ? 'text-accent border-accent' : ''}`}
-              style={sortBy !== 'default' ? { color: 'var(--accent-color)', borderColor: 'var(--accent-color)' } : {}}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'} ${sortBy !== 'default' ? 'text-accent font-bold' : ''}`}
+              style={sortBy !== 'default' ? { color: 'var(--accent-color)' } : {}}
             >
-              <ArrowUpDown className="w-5 h-5" />
+              <ArrowUpDown className="w-[18px] h-[18px]" />
             </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
             >
-              {viewMode === 'list' ? <LayoutGrid className="w-5 h-5" /> : <LayoutList className="w-5 h-5" />}
+              {viewMode === 'list' ? <LayoutGrid className="w-[18px] h-[18px]" /> : <LayoutList className="w-[18px] h-[18px]" />}
             </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setShowThemePicker(!showThemePicker)}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
             >
-              <Palette className="w-5 h-5" style={{ color: 'var(--accent-color)' }} />
+              <Palette className="w-[18px] h-[18px]" style={{ color: 'var(--accent-color)' }} />
             </motion.button>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className={`p-3 rounded-2xl backdrop-blur-md border ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
             >
-              {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+              {isDarkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
             </motion.button>
           </div>
         </header>
 
         {/* Search */}
         <div className="relative mb-6">
-          <Search className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 opacity-30`} />
+          <Search className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-white/40' : 'text-black/40'}`} />
           <input 
             type="text" 
             placeholder="لټون..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full border rounded-2xl py-3 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-soft)] transition-all ${
+            className={`w-full border rounded-2xl py-3.5 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-soft)] transition-all ${
               isDarkMode 
-                ? 'bg-white/5 border-white/10 placeholder:text-white/20' 
-                : 'bg-black/5 border-black/10 placeholder:text-black/20 text-black'
+                ? 'bg-white/5 border-white/10 placeholder:text-white/30 text-white' 
+                : 'bg-black/5 border-black/15 placeholder:text-black/40 text-[#1a1614]'
             }`}
           />
         </div>
@@ -427,14 +440,14 @@ export default function App() {
           ))}
         </div>
 
-        {/* List Body */}
-        <div className={`flex-1 overflow-y-auto no-scrollbar pr-1 pb-4 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-4 space-y-0' : 'space-y-3'}`}>
+        {/* List Body with safe pb-32 so elements scroll fully past sticky Mini Player on mobile */}
+        <div className={`flex-1 overflow-y-auto no-scrollbar pr-1 pb-32 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-4 space-y-0' : 'space-y-3'}`}>
           {loading ? (
              <div className="flex justify-center py-10 col-span-full">
                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
                  <Music4 className="w-6 h-6 opacity-30" style={{ color: 'var(--accent-color)' }} />
                </motion.div>
-            </div>
+             </div>
           ) : filteredTracks.map((track, idx) => (
             <motion.div
               layout
@@ -445,7 +458,7 @@ export default function App() {
               onClick={() => handleTrackSelect(track)}
               className={`group relative transition-all cursor-pointer border overflow-hidden ${
                 viewMode === 'grid' 
-                ? 'flex flex-col rounded-3xl p-0' 
+                ? 'flex flex-col rounded-[2rem] p-4 h-48 justify-between' 
                 : 'flex items-center p-3 rounded-2xl'
               } ${
                 currentTrack?.id === track.id
@@ -454,50 +467,90 @@ export default function App() {
               }`}
               style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}
             >
-              <div className={`${viewMode === 'grid' ? 'w-full aspect-square relative' : 'relative w-12 h-12 rounded-xl overflow-hidden ml-3 flex-shrink-0'}`}>
-                <img src={track.thumbnail} alt="" className="w-full h-full object-cover" />
-                {currentTrack?.id === track.id && isPlaying && (
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                    <div className="flex gap-0.5 items-end h-3">
-                      <motion.div animate={{ height: [4, 12, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                      <motion.div animate={{ height: [8, 4, 10] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                      <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+              {viewMode === 'grid' ? (
+                // Super Premium Grid Mode Layout
+                <div className="flex flex-col justify-between h-full w-full">
+                  {/* Top bar with heart and a styled badge */}
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-[10px] px-2 py-0.5 bg-accent/10 rounded-full font-bold uppercase tracking-tight text-accent font-sans" style={{ color: 'var(--accent-color)', backgroundColor: 'var(--accent-soft)' }}>
+                      برخه {track.filename?.replace(/\.[^/.]+$/, "")}
+                    </span>
+                    <button 
+                      onClick={(e) => toggleFavorite(track.id, e)}
+                      className={`p-1.5 rounded-full backdrop-blur-md transition-all ${favorites.includes(track.id) ? 'text-accent scale-110' : 'opacity-40 hover:opacity-100'}`}
+                      style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                    >
+                      <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
+
+                  {/* Center Visualization / Play animation */}
+                  <div className="flex justify-center items-center my-2 flex-1">
+                    {currentTrack?.id === track.id && isPlaying ? (
+                       <div className="flex gap-1 items-end h-8">
+                         <motion.div animate={{ height: [6, 24, 8] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                         <motion.div animate={{ height: [12, 6, 20] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                         <motion.div animate={{ height: [18, 10, 12] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                       </div>
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
+                        <Music4 className="w-5 h-5 opacity-40 animate-pulse" style={{ color: 'var(--accent-color)' }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title & Metadata */}
+                  <div className="text-right w-full mt-1">
+                    <h3 className={`text-xs font-bold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
+                      {track.title || track.filename}
+                    </h3>
+                    <div className="flex items-center justify-between mt-0.5 text-[10px] opacity-40">
+                      <span className="truncate max-w-[70px]">{track.artist}</span>
+                      <span className="font-mono text-[9px] opacity-60">{track.duration || '00:00'}</span>
                     </div>
                   </div>
-                )}
-                {viewMode === 'grid' && (
-                  <button 
-                    onClick={(e) => toggleFavorite(track.id, e)}
-                    className={`absolute top-3 left-3 p-2 rounded-full backdrop-blur-md bg-black/20 transition-all ${favorites.includes(track.id) ? 'text-accent' : 'text-white/40 hover:text-white'}`}
-                    style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
-                  </button>
-                )}
-              </div>
-              
-              <div className={`flex-1 min-w-0 ${viewMode === 'grid' ? 'p-3' : ''}`}>
-                <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
-                  {track.title || track.filename}
-                </h3>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className={`text-[10px] truncate opacity-40`}>{track.artist}</p>
-                  <span className="text-[10px] opacity-20">•</span>
-                  <p className="text-[10px] opacity-30 font-mono">{track.filename}</p>
                 </div>
-              </div>
+              ) : (
+                // Super Premium List Mode Layout
+                <>
+                  <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center ml-3 flex-shrink-0 border ${
+                    currentTrack?.id === track.id ? 'bg-accent/20 border-accent/30' : `${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`
+                  }`} style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}>
+                    {currentTrack?.id === track.id && isPlaying ? (
+                      <div className="flex gap-0.5 items-end h-4">
+                        <motion.div animate={{ height: [4, 14, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                        <motion.div animate={{ height: [8, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                        <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center font-sans">
+                        <Music4 className="w-5 h-5 opacity-40" style={{ color: 'var(--accent-color)' }} />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
+                      {track.title || track.filename}
+                    </h3>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <p className={`text-[10px] truncate opacity-40`}>{track.artist}</p>
+                      <span className="text-[10px] opacity-20">•</span>
+                      <p className="text-[10px] opacity-30 font-mono">{track.filename}</p>
+                    </div>
+                  </div>
 
-              {viewMode === 'list' && (
-                <div className="flex items-center gap-3">
-                  <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
-                  <button 
-                    onClick={(e) => toggleFavorite(track.id, e)}
-                    className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
-                    style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
-                  >
-                    <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
-                  </button>
-                </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
+                    <button 
+                      onClick={(e) => toggleFavorite(track.id, e)}
+                      className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
+                      style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                    >
+                      <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
+                    </button>
+                  </div>
+                </>
               )}
             </motion.div>
           ))}
@@ -527,8 +580,8 @@ export default function App() {
                 isDarkMode ? 'bg-[#1a1614]/90 border-white/10 shadow-black/80' : 'bg-white/90 border-black/10 shadow-orange-900/10'
               }`}
             >
-              <div className="w-10 h-10 rounded-xl overflow-hidden ml-3">
-                <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
+              <div className="w-10 h-10 rounded-xl bg-accent-soft/30 flex items-center justify-center ml-3 flex-shrink-0 border border-accent/10">
+                <Music4 className="w-5 h-5 text-accent animate-pulse" style={{ color: 'var(--accent-color)' }} />
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="text-sm font-medium truncate">{currentTrack.title}</h4>
@@ -595,10 +648,50 @@ export default function App() {
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center mt-4">
               <motion.div 
                 layoutId="player-art"
-                style={{ borderRadius: '2.5rem' }}
-                className={`w-full aspect-square max-w-[320px] shadow-2xl overflow-hidden mb-10 ring-1 ${isDarkMode ? 'shadow-black/80 ring-white/10' : 'shadow-black/5 ring-black/5'}`}
+                className={`w-full aspect-square max-w-[280px] rounded-[3rem] shadow-2xl mb-8 flex flex-col items-center justify-center relative border overflow-hidden ${
+                  isDarkMode 
+                    ? 'bg-white/5 border-white/10 shadow-black/40' 
+                    : 'bg-black/5 border-black/5 shadow-black/5'
+                }`}
               >
-                <img src={currentTrack.thumbnail} alt="" className="w-full h-full object-cover" />
+                {/* Animated pulsating background aura */}
+                <AnimatePresence>
+                  {isPlaying && (
+                    <motion.div 
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
+                      exit={{ scale: 0.8, opacity: 0 }}
+                      transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+                      className="absolute inset-0 rounded-[3rem]"
+                      style={{ backgroundImage: `radial-gradient(circle, var(--accent-soft) 20%, transparent 80%)` }}
+                    />
+                  )}
+                </AnimatePresence>
+
+                {/* Rotating Vinyl/CD pattern styled block */}
+                <motion.div 
+                  animate={isPlaying ? { rotate: 360 } : {}}
+                  transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+                  className="w-36 h-36 rounded-full border-4 border-dashed flex items-center justify-center relative"
+                  style={{ borderColor: 'var(--accent-color)' }}
+                >
+                  <div className="absolute inset-2 rounded-full border border-accent/20" />
+                  <div className="absolute inset-4 rounded-full border border-accent/30" />
+                  <div className="w-16 h-16 rounded-full bg-accent-soft/40 flex items-center justify-center">
+                    <Music4 className="w-8 h-8 text-accent animate-pulse" style={{ color: 'var(--accent-color)' }} />
+                  </div>
+                </motion.div>
+
+                {/* Equalizer lines inside full player card */}
+                {isPlaying && (
+                  <div className="flex gap-1.5 items-end h-8 mt-5">
+                    <motion.div animate={{ height: [6, 24, 8] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.1 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
+                    <motion.div animate={{ height: [12, 6, 28] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.3 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
+                    <motion.div animate={{ height: [24, 10, 18] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.2 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
+                    <motion.div animate={{ height: [8, 28, 12] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.4 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
+                    <motion.div animate={{ height: [18, 6, 24] }} transition={{ repeat: Infinity, duration: 0.8, delay: 0.5 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
+                  </div>
+                )}
               </motion.div>
 
               <div className="text-center mb-8 w-full px-4">
