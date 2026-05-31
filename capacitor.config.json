@@ -1,6 +1,6 @@
 {
   "appId": "com.pashto.player.app",
-  "appName": "شرعي مسائل ",
+  "appName": "د پښتو غږیز پلیر",
   "webDir": "dist",
   "bundledWebRuntime": false,
   "plugins": {

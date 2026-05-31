@@ -67,6 +67,17 @@ export default function App() {
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Helper to resolve track source URL absolutely to avoid cross-browser source glitches
+  const getTrackUrl = (url: string) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    const origin = window.location.origin;
+    const cleanUrl = url.startsWith('/') ? url : '/' + url;
+    return `${origin}${cleanUrl}`;
+  };
+
   // Theme synchronization
   useEffect(() => {
     const root = window.document.documentElement;
@@ -208,9 +219,19 @@ export default function App() {
         if (savedViewMode) setViewMode(savedViewMode);
 
         const lastTrackId = localStorage.getItem('pashto_player_last_track');
+        let initialTrack = null;
         if (lastTrackId) {
-          const track = mappedData.find((t: AudioTrack) => t.id === lastTrackId);
-          if (track) setCurrentTrack(track);
+          initialTrack = mappedData.find((t: AudioTrack) => t.id === lastTrackId);
+        }
+        if (!initialTrack && mappedData.length > 0) {
+          initialTrack = mappedData[0];
+        }
+        if (initialTrack) {
+          setCurrentTrack(initialTrack);
+          if (audioRef.current) {
+            audioRef.current.src = getTrackUrl(initialTrack.url);
+            audioRef.current.load();
+          }
         }
 
         setTimeout(() => setShowSplash(false), 2000);
@@ -247,12 +268,30 @@ export default function App() {
       if (filteredTracks.length > 0) handleTrackSelect(filteredTracks[0]);
       return;
     }
-    if (isPlaying) {
-      audioRef.current?.pause();
-    } else {
-      audioRef.current?.play().catch(err => {
-        console.warn("Playback toggle play failed:", err);
-      });
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        const targetUrl = getTrackUrl(currentTrack.url);
+        // Ensure accurate source is bound
+        if (audioRef.current.src !== targetUrl) {
+          audioRef.current.src = targetUrl;
+          audioRef.current.load();
+        }
+        audioRef.current.play()
+          .then(() => {
+            setIsPlaying(true);
+          })
+          .catch(err => {
+            console.warn("Playback toggle play failed, retrying after load:", err);
+            audioRef.current?.load();
+            audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => {
+              console.error("Retry play failed:", e);
+              setIsPlaying(false);
+            });
+          });
+      }
     }
   };
 
@@ -263,18 +302,41 @@ export default function App() {
       return;
     }
     
-    // Programmatically set source and play synchronously to bypass iOS/browser gesture policies
-    if (audioRef.current) {
-      audioRef.current.src = track.url;
-      audioRef.current.load();
-      audioRef.current.play().catch(err => {
-        console.warn("Direct play failed, browser might have blocked it:", err);
-      });
-    }
-
     setCurrentTrack(track);
     setProgress(0);
     localStorage.setItem('pashto_player_last_track', track.id);
+
+    // Programmatically set source and play synchronously within user interaction flow
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        const targetUrl = getTrackUrl(track.url);
+        audioRef.current.src = targetUrl;
+        audioRef.current.load();
+        
+        const playPromise = audioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              setIsPlaying(true);
+            })
+            .catch(err => {
+              console.warn("Direct play failed, scheduling retry:", err);
+              // Retry on short microtask to allow UI rendering state to finalize
+              setTimeout(() => {
+                audioRef.current?.play()
+                  .then(() => setIsPlaying(true))
+                  .catch(e => {
+                    console.error("Direct play retry completely failed:", e);
+                    setIsPlaying(false);
+                  });
+              }, 50);
+            });
+        }
+      } catch (err) {
+        console.error("Direct play exception caught:", err);
+      }
+    }
   };
 
   // Handle Time Update
@@ -1053,7 +1115,6 @@ export default function App() {
 
       <audio
         ref={audioRef}
-        src={currentTrack?.url}
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={() => setDuration(audioRef.current?.duration || 0)}
         onEnded={handleNext}
