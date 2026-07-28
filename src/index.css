@@ -6,23 +6,35 @@
 }
 
 :root {
-  /* Default Theme (Dark) / Orange */
-  --bg-color: #0a0502;
-  --text-color: #ffffff;
-  --panel-bg: rgba(255, 255, 255, 0.05);
-  --panel-border: rgba(255, 255, 255, 0.1);
-  --accent-color: #f97316;
-  --accent-soft: rgba(249, 115, 22, 0.2);
-  --muted-text: rgba(255, 255, 255, 0.4);
+  /* Default Theme (Dark) / Obsidian Cosmic Purple & Fuchsia */
+  --bg-color: #0b0720;
+  --text-color: #f8fafc;
+  --panel-bg: rgba(20, 14, 46, 0.6);
+  --panel-border: rgba(217, 70, 239, 0.15);
+  --accent-color: #d946ef;
+  --accent-soft: rgba(217, 70, 239, 0.15);
+  --muted-text: rgba(248, 250, 252, 0.55);
+  --gold-accent: #f59e0b;
+  --gold-soft: rgba(245, 158, 11, 0.15);
+  --shadow-nm: 8px 8px 18px #04020d, -8px -8px 18px #150d3c;
+  --shadow-nm-inset: inset 4px 4px 8px #04020d, inset -4px -4px 8px #150d3c;
+  --glass-bg: rgba(255, 255, 255, 0.03);
 }
 
 :root.light {
-  /* Light Theme */
-  --bg-color: #fdf8f5;
-  --text-color: #1a1614;
-  --panel-bg: rgba(0, 0, 0, 0.05);
-  --panel-border: rgba(0, 0, 0, 0.1);
-  --muted-text: rgba(0, 0, 0, 0.5);
+  /* Light Theme / Serene Lavender & Violet */
+  --bg-color: #f5f3ff;
+  --text-color: #1e1b4b;
+  --panel-bg: rgba(255, 255, 255, 0.7);
+  --panel-border: rgba(139, 92, 246, 0.12);
+  --muted-text: rgba(30, 27, 75, 0.6);
+  --accent-color: #8b5cf6;
+  --accent-soft: rgba(139, 92, 246, 0.12);
+  --gold-accent: #ca8a04;
+  --gold-soft: rgba(202, 138, 4, 0.1);
+  --shadow-nm: 8px 8px 18px #d8d3f5, -8px -8px 18px #ffffff;
+  --shadow-nm-inset: inset 4px 4px 8px #d8d3f5, inset -4px -4px 8px #ffffff;
+  --glass-bg: rgba(255, 255, 255, 0.4);
 }
 
 /* Theme Accents */

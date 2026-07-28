@@ -1,6 +1,6 @@
 {
-  "name": "شرعي مسايلو حل",
-  "description": "د محترم مفتي محمد آصف مبارز صاحب غږیز جوابونه د شرعي مسایلو د حل په اړه. دا اپلیکیشن په افلاین ډول کار کوي.",
+  "name": "خير الدين بربروسا",
+  "description": "د خير الدين بربروسا غږيز جوابونه - ټولې ۵ برخې. لومړی ورژن.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

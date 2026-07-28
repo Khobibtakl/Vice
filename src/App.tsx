@@ -60,12 +60,73 @@ export default function App() {
   const [showThemePicker, setShowThemePicker] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [showContact, setShowContact] = useState(false);
+  const [showSleepModal, setShowSleepModal] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
   const [sortBy, setSortBy] = useState<'title' | 'artist' | 'default'>('default');
   const [showSplash, setShowSplash] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [sleepTimer, setSleepTimer] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const timerRef = useRef<any>(null);
+
+  // Clean sleep timer on unmount
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  // Sync playback speed when track changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+  }, [currentTrack, speed]);
+
+  const changeSpeed = () => {
+    const speeds = [1, 1.25, 1.5, 2];
+    const nextIndex = (speeds.indexOf(speed) + 1) % speeds.length;
+    const nextSpeed = speeds[nextIndex];
+    setSpeed(nextSpeed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextSpeed;
+    }
+  };
+
+  const startSleepTimer = (minutes: number | null) => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    if (minutes === null) {
+      setSleepTimer(null);
+      setTimeLeft(null);
+      return;
+    }
+
+    setSleepTimer(minutes);
+    const totalSeconds = minutes * 60;
+    setTimeLeft(totalSeconds);
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === null || prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          if (audioRef.current) {
+            audioRef.current.pause();
+            setIsPlaying(false);
+          }
+          setSleepTimer(null);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   // Helper to resolve track source URL absolutely to avoid cross-browser source glitches
   const getTrackUrl = (url: string) => {
@@ -83,7 +144,7 @@ export default function App() {
     const root = window.document.documentElement;
     
     // Determine the status bar background color based on light/dark mode theme
-    const statusBarColor = isDarkMode ? '#0a0502' : '#fdf8f5';
+    const statusBarColor = isDarkMode ? '#030a08' : '#f4faf8';
 
     // 1. Dynamic Web Theme Color Meta updates
     let themeMeta = document.querySelector('meta[name="theme-color"]');
@@ -159,46 +220,50 @@ export default function App() {
               data = JSON.parse(rawText);
             } catch (pErr) {
               console.warn("Standard JSON parse failed, trying safe cleaning...", pErr);
-              // Clean trailing commas and spacing in arrays or objects
               const cleanedText = rawText
-                .replace(/,\s*([\]}])/g, '$1') // remove trailing commas
-                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":'); // wrap unquoted keys with quotes
+                .replace(/,\s*([\]}])/g, '$1')
+                .replace(/([{,]\s*)([a-zA-Z0-9_]+)\s*:/g, '$1"$2":');
               data = JSON.parse(cleanedText);
             }
           } else {
-            throw new Error(`Failed to fetch tracks.json: status ${response.status}`);
+            // Try fetching from assets folder as fallback
+            const assetResp = await fetch('src/assets/tracks.json');
+            if (assetResp.ok) {
+              data = await assetResp.json();
+            } else {
+              data = INITIAL_TRACKS;
+            }
           }
         } catch (fetchErr) {
-          console.error("Failed to load tracks.json, generating default fallback list:", fetchErr);
-          // Fallback array of 50 items so the app is always fully functional and populated
-          data = Array.from({ length: 50 }, (_, i) => `${i + 1}.mp3`);
+          console.warn("Failed to fetch tracks.json, falling back to initial tracks asset list:", fetchErr);
+          data = INITIAL_TRACKS;
         }
 
         // Helper to format beautiful Pashto titles from filenames like '1.mp3' or '1'
         const formatTitleFromFilename = (filename: string) => {
-          const cleanName = filename.replace(/\.[^/.]+$/, ""); // strip extension
+          const cleanName = filename.replace(/\.[^/.]+$/, "");
           const num = parseInt(cleanName, 10);
           if (!isNaN(num)) {
-            return `${num}- برخه د مسئلو جوابونه`;
+            return `${num}- برخه خير الدين بربروسا`;
           }
           return cleanName;
         };
 
-        // Initial mapping with robust support for array of strings or simple objects
-        const mappedData = (Array.isArray(data) ? data : []).map((track: any, index: number) => {
+        // Initial mapping with robust support for array of strings or objects
+        const mappedData = (Array.isArray(data) && data.length > 0 ? data : INITIAL_TRACKS).map((track: any, index: number) => {
           const isString = typeof track === 'string';
-          const filename = isString ? track : (track?.filename || track?.url?.split('/').pop() || `track-${index}.mp3`);
+          const filename = isString ? track : (track?.filename || track?.url?.split('/').pop() || `${index + 1}.mp3`);
           const title = isString ? formatTitleFromFilename(filename) : (track?.title || formatTitleFromFilename(filename));
           const category = isString ? 'lessons' : (track?.category || 'lessons');
 
           return {
-            id: isString ? `track-${index}` : (track.id || `track-${index}`),
+            id: isString ? `track-${index + 1}` : (track.id || `track-${index + 1}`),
             title: title,
             category: category,
-            artist: isString ? 'مفتي محمد آصف مبارز' : (track.artist || 'مفتي محمد آصف مبارز'),
+            artist: isString ? 'الحاج داکتر فريدون احرار' : (track.artist || 'الحاج داکتر فريدون احرار'),
             url: isString ? `audio/${filename}` : (track.url || `audio/${filename}`),
             filename: filename,
-            duration: isString ? '00:00' : (track.duration || '00:00'),
+            duration: isString ? '05:00' : (track.duration || '05:00'),
             thumbnail: isString ? 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400' : (track.thumbnail || 'https://images.unsplash.com/photo-1514525253361-bee8a8168ea7?auto=format&fit=crop&q=80&w=400'),
             categoryLabel: CATEGORIES.find(c => c.id === category)?.label || 'شرعي جوابونه'
           };
@@ -284,10 +349,10 @@ export default function App() {
             setIsPlaying(true);
           })
           .catch(err => {
-            console.warn("Playback toggle play failed, retrying after load:", err);
+            console.info("Playback toggle play failed, retrying after load:", err);
             audioRef.current?.load();
             audioRef.current?.play().then(() => setIsPlaying(true)).catch(e => {
-              console.error("Retry play failed:", e);
+              console.warn("Retry play failed:", e);
               setIsPlaying(false);
             });
           });
@@ -321,20 +386,20 @@ export default function App() {
               setIsPlaying(true);
             })
             .catch(err => {
-              console.warn("Direct play failed, scheduling retry:", err);
+              console.info("Direct play failed, scheduling retry:", err);
               // Retry on short microtask to allow UI rendering state to finalize
               setTimeout(() => {
                 audioRef.current?.play()
                   .then(() => setIsPlaying(true))
                   .catch(e => {
-                    console.error("Direct play retry completely failed:", e);
+                    console.warn("Direct play retry completely failed:", e);
                     setIsPlaying(false);
                   });
               }, 50);
             });
         }
       } catch (err) {
-        console.error("Direct play exception caught:", err);
+        console.warn("Direct play exception caught:", err);
       }
     }
   };
@@ -403,35 +468,122 @@ export default function App() {
   }, [activeCategory, searchQuery, tracks, sortBy]);
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center w-full ${isDarkMode ? 'bg-[#0a0502] text-white' : 'bg-[#fdf8f5] text-[#1a1614]'}`} dir="rtl">
+    <div className="min-h-screen transition-colors duration-500 overflow-hidden flex flex-col items-center w-full bg-[var(--bg-color)] text-[var(--text-color)]" dir="rtl">
       {/* Background Atmosphere */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className={`absolute inset-0 bg-radial-at-t transition-opacity duration-1000 ${isDarkMode ? 'opacity-60' : 'opacity-100'} blur-3xl`} style={{ backgroundImage: `radial-gradient(circle at top, var(--accent-soft), transparent)` }} />
+      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        {/* Dark cosmic base */}
+        <div className={`absolute inset-0 transition-colors duration-1000 ${isDarkMode ? 'bg-[#060318]' : 'bg-[#f4f2fe]'}`} />
+        
+        {/* Floating Orb 1 */}
+        <motion.div 
+          animate={{ 
+            scale: [1, 1.25, 1],
+            x: [0, 20, 0],
+            y: [0, -35, 0],
+          }}
+          transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute -top-[10%] -right-[10%] w-[380px] h-[380px] rounded-full blur-[100px] opacity-35"
+          style={{ 
+            background: isDarkMode 
+              ? 'radial-gradient(circle, rgba(217,70,239,0.25) 0%, rgba(139,92,246,0.1) 70%, transparent 100%)'
+              : 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, rgba(217,70,239,0.05) 70%, transparent 100%)' 
+          }}
+        />
+
+        {/* Floating Orb 2 */}
+        <motion.div 
+          animate={{ 
+            scale: [1.1, 0.9, 1.1],
+            x: [0, -45, 0],
+            y: [0, 25, 0],
+          }}
+          transition={{ duration: 18, repeat: Infinity, ease: 'easeInOut', delay: 2 }}
+          className="absolute -bottom-[15%] -left-[10%] w-[420px] h-[420px] rounded-full blur-[110px] opacity-30"
+          style={{ 
+            background: isDarkMode 
+              ? 'radial-gradient(circle, rgba(139,92,246,0.2) 0%, rgba(99,102,241,0.08) 70%, transparent 100%)'
+              : 'radial-gradient(circle, rgba(217,70,239,0.1) 0%, rgba(139,92,246,0.05) 70%, transparent 100%)'
+          }}
+        />
+
+        {/* Floating Orb 3 */}
+        <motion.div 
+          animate={{ 
+            scale: [0.9, 1.15, 0.9],
+            x: [0, 30, 0],
+            y: [0, 40, 0],
+          }}
+          transition={{ duration: 22, repeat: Infinity, ease: 'easeInOut', delay: 4 }}
+          className="absolute top-[35%] left-[-20%] w-[360px] h-[360px] rounded-full blur-[90px] opacity-25"
+          style={{ 
+            background: isDarkMode 
+              ? 'radial-gradient(circle, rgba(236,72,153,0.18) 0%, rgba(217,70,239,0.05) 70%, transparent 100%)'
+              : 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, rgba(139,92,246,0.05) 70%, transparent 100%)'
+          }}
+        />
       </div>
 
       {/* Main Content */}
       <main className="relative z-10 w-full max-w-lg h-[100dvh] flex flex-col px-4 pt-4 overflow-hidden safe-area-top">
         {/* Header */}
-        <header className="flex flex-col gap-4 mb-6 mt-2 text-center items-center justify-center">
-          <div className="flex flex-col items-center">
-            <h1 className="text-3xl font-extrabold tracking-tight mb-1 bg-gradient-to-r from-accent via-accent to-accent bg-clip-text text-transparent" style={{ backgroundImage: `linear-gradient(to right, var(--accent-color), var(--accent-color))` }}>شرعي مسايلو حل</h1>
-            <p className={`text-[11px] uppercase tracking-[0.2em] font-semibold opacity-65`}>مفتي محمد آصف مبارز</p>
-          </div>
-          <div className={`flex gap-1.5 p-1 rounded-2xl border backdrop-blur-md ${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/5 hover:border-black/10'}`}>
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
-              onClick={() => setShowContact(true)}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
-            >
-              <MessageCircle className="w-[18px] h-[18px]" />
-            </motion.button>
-            <motion.button 
-              whileTap={{ scale: 0.9 }}
+        <header className="flex flex-col gap-5 mb-6 mt-4 text-center items-center justify-center relative z-20">
+          <div className="flex w-full items-center justify-between px-2">
+            {/* Right button (Menu) */}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
               onClick={() => setShowInfo(true)}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
+              className="w-11 h-11 rounded-full flex items-center justify-center transition-all border shadow-[var(--shadow-nm)]"
+              style={{ 
+                backgroundColor: 'var(--panel-bg)', 
+                borderColor: 'var(--panel-border)',
+                boxShadow: 'var(--shadow-nm)'
+              }}
             >
-              <Info className="w-[18px] h-[18px]" />
+              <Info className="w-5 h-5 text-[var(--accent-color)]" />
             </motion.button>
+
+            {/* Center Title */}
+            <div className="flex flex-col items-center">
+              <h1 className="text-2xl font-bold tracking-tight mb-0.5 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-600 bg-clip-text text-transparent">
+                خير الدين بربروسا
+              </h1>
+              <p className="text-[10px] uppercase tracking-[0.15em] font-semibold opacity-60">
+                الحاج داکتر فريدون احرار
+              </p>
+            </div>
+
+            {/* Left Options/Theme Toggle */}
+            <div className="flex gap-2">
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={() => setShowContact(true)}
+                className="w-11 h-11 rounded-full flex items-center justify-center transition-all border"
+                style={{ 
+                  backgroundColor: 'var(--panel-bg)', 
+                  borderColor: 'var(--panel-border)',
+                  boxShadow: 'var(--shadow-nm)'
+                }}
+              >
+                <MessageCircle className="w-5 h-5 text-[var(--text-color)] opacity-70" />
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.92 }}
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="w-11 h-11 rounded-full flex items-center justify-center transition-all border"
+                style={{ 
+                  backgroundColor: 'var(--panel-bg)', 
+                  borderColor: 'var(--panel-border)',
+                  boxShadow: 'var(--shadow-nm)'
+                }}
+              >
+                {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-indigo-950" />}
+              </motion.button>
+            </div>
+          </div>
+
+          {/* Quick Config Bar */}
+          <div className="flex gap-2 p-1.5 rounded-full border backdrop-blur-md self-center text-xs"
+               style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}>
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => {
@@ -439,63 +591,80 @@ export default function App() {
                 const next = sorts[(sorts.indexOf(sortBy) + 1) % sorts.length];
                 setSortBy(next);
               }}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'} ${sortBy !== 'default' ? 'text-accent font-bold' : ''}`}
-              style={sortBy !== 'default' ? { color: 'var(--accent-color)' } : {}}
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${sortBy !== 'default' ? 'bg-fuchsia-500/20 text-fuchsia-400 font-bold' : 'opacity-60'}`}
             >
-              <ArrowUpDown className="w-[18px] h-[18px]" />
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>{sortBy === 'title' ? 'الفبا' : sortBy === 'artist' ? 'بیان کوونکی' : 'معیاري'}</span>
             </motion.button>
+
             <motion.button 
               whileTap={{ scale: 0.9 }}
               onClick={() => setViewMode(viewMode === 'list' ? 'grid' : 'list')}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
+              className="px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 opacity-60 hover:opacity-100"
             >
-              {viewMode === 'list' ? <LayoutGrid className="w-[18px] h-[18px]" /> : <LayoutList className="w-[18px] h-[18px]" />}
+              {viewMode === 'list' ? <LayoutGrid className="w-3.5 h-3.5" /> : <LayoutList className="w-3.5 h-3.5" />}
+              <span>{viewMode === 'list' ? 'جدول' : 'لیست'}</span>
             </motion.button>
+
             <motion.button 
               whileTap={{ scale: 0.9 }}
-              onClick={() => setShowThemePicker(!showThemePicker)}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
+              onClick={() => setShowThemePicker(true)}
+              className="px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 opacity-60 hover:opacity-100"
             >
-              <Palette className="w-[18px] h-[18px]" style={{ color: 'var(--accent-color)' }} />
+              <Palette className="w-3.5 h-3.5 text-fuchsia-400" />
+              <span>رنګ</span>
             </motion.button>
+
             <motion.button 
               whileTap={{ scale: 0.9 }}
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className={`p-2.5 rounded-xl transition-colors ${isDarkMode ? 'text-white/70 hover:text-white hover:bg-white/5' : 'text-black/70 hover:text-black hover:bg-black/5'}`}
+              onClick={() => setShowSleepModal(true)}
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${sleepTimer !== null ? 'bg-indigo-500/20 text-indigo-400 font-bold' : 'opacity-60 hover:opacity-100'}`}
             >
-              {isDarkMode ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
+              <Moon className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{timeLeft !== null ? `${Math.floor(timeLeft / 60)}:${(timeLeft % 60).toString().padStart(2, '0')}` : 'د شپې موډ'}</span>
             </motion.button>
           </div>
         </header>
 
         {/* Search */}
-        <div className="relative mb-6">
-          <Search className={`absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 ${isDarkMode ? 'text-white/40' : 'text-black/40'}`} />
+        <div className="relative mb-6 z-20">
+          <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 opacity-40 text-[var(--text-color)]" />
           <input 
             type="text" 
             placeholder="لټون..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full border rounded-2xl py-3.5 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent-soft)] transition-all ${
-              isDarkMode 
-                ? 'bg-white/5 border-white/10 placeholder:text-white/30 text-white' 
-                : 'bg-black/5 border-black/15 placeholder:text-black/40 text-[#1a1614]'
-            }`}
+            className="w-full border rounded-[1.5rem] py-3.5 pr-11 pl-4 text-sm focus:outline-none focus:ring-2 focus:ring-fuchsia-500/20 transition-all shadow-inner"
+            style={{
+              backgroundColor: 'var(--panel-bg)',
+              borderColor: 'var(--panel-border)',
+              color: 'var(--text-color)'
+            }}
           />
         </div>
 
         {/* Categories */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2 scrollbar-none no-scrollbar">
+        <div className="flex gap-3.5 mb-8 overflow-x-auto pb-2 scrollbar-none no-scrollbar z-20">
           {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
-              className={`px-5 py-2.5 rounded-full text-sm font-medium whitespace-nowrap transition-all border ${
+              className={`px-6 py-3 rounded-full text-sm font-semibold whitespace-nowrap transition-all border ${
                 activeCategory === cat.id 
-                  ? 'bg-accent border-accent text-white shadow-lg' 
-                  : `border-transparent ${isDarkMode ? 'bg-white/5 text-white/50 hover:bg-white/10' : 'bg-black/5 text-black/50 hover:bg-black/10'}`
+                  ? 'text-white shadow-[0_4px_20px_rgba(217,70,239,0.35)]' 
+                  : 'opacity-75'
               }`}
-              style={activeCategory === cat.id ? { backgroundColor: 'var(--accent-color)', borderColor: 'var(--accent-color)', boxShadow: `0 10px 15px -3px var(--accent-soft)` } : {}}
+              style={{
+                background: activeCategory === cat.id 
+                  ? 'linear-gradient(135deg, #d946ef 0%, #8b5cf6 100%)' 
+                  : 'var(--panel-bg)',
+                borderColor: activeCategory === cat.id 
+                  ? 'transparent' 
+                  : 'var(--panel-border)',
+                boxShadow: activeCategory === cat.id 
+                  ? '0 6px 20px rgba(217,70,239,0.35)' 
+                  : 'var(--shadow-nm)'
+              }}
             >
               {cat.label}
             </button>
@@ -503,7 +672,7 @@ export default function App() {
         </div>
 
         {/* List Body with safe pb-32 so elements scroll fully past sticky Mini Player on mobile */}
-        <div className={`flex-1 overflow-y-auto no-scrollbar pr-1 pb-32 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-4 space-y-0' : 'space-y-3'}`}>
+        <div className={`flex-1 overflow-y-auto no-scrollbar pr-1 pb-32 z-20 ${viewMode === 'grid' ? 'grid grid-cols-2 gap-4 space-y-0' : 'space-y-4'}`}>
           {loading ? (
              <div className="flex justify-center py-10 col-span-full">
                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}>
@@ -513,34 +682,33 @@ export default function App() {
           ) : filteredTracks.map((track, idx) => (
             <motion.div
               layout
-              initial={{ opacity: 0, scale: 0.9 }}
+              initial={{ opacity: 0, scale: 0.93 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: idx * 0.03 }}
               key={track.id}
               onClick={() => handleTrackSelect(track)}
-              className={`group relative transition-all cursor-pointer border overflow-hidden ${
+              className={`group relative transition-all duration-300 cursor-pointer border overflow-hidden ${
                 viewMode === 'grid' 
-                ? 'flex flex-col rounded-[2rem] p-4 h-48 justify-between' 
-                : 'flex items-center p-3 rounded-2xl'
-              } ${
-                currentTrack?.id === track.id
-                  ? 'bg-accent-soft border-accent'
-                  : `${isDarkMode ? 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10' : 'bg-black/5 border-black/5 hover:bg-black/10 hover:border-black/10'}`
+                ? 'flex flex-col rounded-[2.5rem] p-5 h-52 justify-between backdrop-blur-md' 
+                : 'flex items-center p-4 rounded-[2rem] backdrop-blur-md'
               }`}
-              style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}
+              style={{
+                backgroundColor: currentTrack?.id === track.id ? 'rgba(217,70,239,0.08)' : 'var(--panel-bg)',
+                borderColor: currentTrack?.id === track.id ? 'rgba(217,70,239,0.35)' : 'var(--panel-border)',
+                boxShadow: currentTrack?.id === track.id ? '0 8px 32px rgba(217,70,239,0.15)' : 'var(--shadow-nm)'
+              }}
             >
               {viewMode === 'grid' ? (
                 // Super Premium Grid Mode Layout
                 <div className="flex flex-col justify-between h-full w-full">
                   {/* Top bar with heart and a styled badge */}
                   <div className="flex items-center justify-between w-full">
-                    <span className="text-[10px] px-2 py-0.5 bg-accent/10 rounded-full font-bold uppercase tracking-tight text-accent font-sans" style={{ color: 'var(--accent-color)', backgroundColor: 'var(--accent-soft)' }}>
+                    <span className="text-[10px] px-2.5 py-1 bg-fuchsia-500/10 rounded-full font-bold uppercase tracking-tight text-fuchsia-400 font-sans">
                       برخه {track.filename?.replace(/\.[^/.]+$/, "")}
                     </span>
                     <button 
                       onClick={(e) => toggleFavorite(track.id, e)}
-                      className={`p-1.5 rounded-full backdrop-blur-md transition-all ${favorites.includes(track.id) ? 'text-accent scale-110' : 'opacity-40 hover:opacity-100'}`}
-                      style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                      className={`p-1.5 rounded-full transition-all ${favorites.includes(track.id) ? 'text-fuchsia-400 scale-110' : 'opacity-40 hover:opacity-100'}`}
                     >
                       <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
                     </button>
@@ -550,23 +718,23 @@ export default function App() {
                   <div className="flex justify-center items-center my-2 flex-1">
                     {currentTrack?.id === track.id && isPlaying ? (
                        <div className="flex gap-1 items-end h-8">
-                         <motion.div animate={{ height: [6, 24, 8] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                         <motion.div animate={{ height: [12, 6, 20] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                         <motion.div animate={{ height: [18, 10, 12] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                         <motion.div animate={{ height: [6, 24, 8] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-fuchsia-500 rounded-full" />
+                         <motion.div animate={{ height: [12, 6, 20] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-fuchsia-500 rounded-full" />
+                         <motion.div animate={{ height: [18, 10, 12] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-fuchsia-500 rounded-full" />
                        </div>
                     ) : (
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                        <Music4 className="w-5 h-5 opacity-40 animate-pulse" style={{ color: 'var(--accent-color)' }} />
+                      <div className="w-11 h-11 rounded-full flex items-center justify-center border border-white/5 bg-white/5 shadow-[var(--shadow-nm-inset)]">
+                        <Music4 className="w-5 h-5 text-fuchsia-400 opacity-60" />
                       </div>
                     )}
                   </div>
 
                   {/* Title & Metadata */}
                   <div className="text-right w-full mt-1">
-                    <h3 className={`text-xs font-bold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
+                    <h3 className={`text-xs font-bold truncate ${currentTrack?.id === track.id ? 'text-fuchsia-400' : ''}`}>
                       {track.title || track.filename}
                     </h3>
-                    <div className="flex items-center justify-between mt-0.5 text-[10px] opacity-40">
+                    <div className="flex items-center justify-between mt-1 text-[10px] opacity-40">
                       <span className="truncate max-w-[70px]">{track.artist}</span>
                       <span className="font-mono text-[9px] opacity-60">{track.duration || '00:00'}</span>
                     </div>
@@ -575,42 +743,63 @@ export default function App() {
               ) : (
                 // Super Premium List Mode Layout
                 <>
-                  <div className={`relative w-12 h-12 rounded-2xl flex items-center justify-center ml-3 flex-shrink-0 border ${
-                    currentTrack?.id === track.id ? 'bg-accent/20 border-accent/30' : `${isDarkMode ? 'bg-white/5 border-white/10' : 'bg-black/5 border-black/10'}`
-                  }`} style={currentTrack?.id === track.id ? { backgroundColor: 'var(--accent-soft)', borderColor: 'var(--accent-color)' } : {}}>
+                  <div className="relative w-11 h-11 rounded-2xl flex items-center justify-center ml-3.5 flex-shrink-0 border"
+                       style={{
+                         backgroundColor: currentTrack?.id === track.id ? 'rgba(217,70,239,0.15)' : 'rgba(255, 255, 255, 0.03)',
+                         borderColor: currentTrack?.id === track.id ? 'rgba(217,70,239,0.3)' : 'rgba(255, 255, 255, 0.05)',
+                       }}>
                     {currentTrack?.id === track.id && isPlaying ? (
                       <div className="flex gap-0.5 items-end h-4">
-                        <motion.div animate={{ height: [4, 14, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                        <motion.div animate={{ height: [8, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
-                        <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-1 bg-accent rounded-full" style={{ backgroundColor: 'var(--accent-color)' }} />
+                        <motion.div animate={{ height: [4, 14, 6] }} transition={{ repeat: Infinity, duration: 0.6 }} className="w-0.75 bg-fuchsia-500 rounded-full" />
+                        <motion.div animate={{ height: [8, 4, 12] }} transition={{ repeat: Infinity, duration: 0.8 }} className="w-0.75 bg-fuchsia-500 rounded-full" />
+                        <motion.div animate={{ height: [12, 6, 8] }} transition={{ repeat: Infinity, duration: 0.7 }} className="w-0.75 bg-fuchsia-500 rounded-full" />
                       </div>
                     ) : (
                       <div className="flex flex-col items-center justify-center font-sans">
-                        <Music4 className="w-5 h-5 opacity-40" style={{ color: 'var(--accent-color)' }} />
+                        <Music4 className="w-4.5 h-4.5 text-fuchsia-400 opacity-55" />
                       </div>
                     )}
                   </div>
                   
-                  <div className="flex-1 min-w-0">
-                    <h3 className={`text-sm font-semibold truncate ${currentTrack?.id === track.id ? 'text-accent' : ''}`} style={currentTrack?.id === track.id ? { color: 'var(--accent-color)' } : {}}>
+                  <div className="flex-1 min-w-0 text-right">
+                    <h3 className={`text-sm font-bold truncate ${currentTrack?.id === track.id ? 'text-fuchsia-400' : ''}`}>
                       {track.title || track.filename}
                     </h3>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <p className={`text-[10px] truncate opacity-40`}>{track.artist}</p>
-                      <span className="text-[10px] opacity-20">•</span>
-                      <p className="text-[10px] opacity-30 font-mono">{track.filename}</p>
+                    <div className="flex items-center gap-2 mt-0.5 opacity-40">
+                      <p className="text-[10px] truncate">{track.artist}</p>
+                      <span className="text-[9px] opacity-35">•</span>
+                      <p className="text-[10px] font-mono font-bold">برخه {track.filename?.replace(/\.[^/.]+$/, "")}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-mono opacity-30`}>{track.duration}</span>
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <span className="text-[10px] font-mono font-semibold opacity-40">{track.duration}</span>
                     <button 
                       onClick={(e) => toggleFavorite(track.id, e)}
-                      className={`p-2 rounded-full transition-colors ${favorites.includes(track.id) ? 'text-accent' : 'opacity-20 hover:opacity-100'}`}
-                      style={favorites.includes(track.id) ? { color: 'var(--accent-color)' } : {}}
+                      className={`p-1.5 rounded-full transition-all ${favorites.includes(track.id) ? 'text-fuchsia-400 scale-105' : 'opacity-25 hover:opacity-100'}`}
                     >
                       <Heart className={`w-4 h-4 ${favorites.includes(track.id) ? 'fill-current' : ''}`} />
                     </button>
+                    
+                    {/* Pink/Fuchsia gradient Play button on the edge exactly like the middle pane in the mockup */}
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300"
+                         style={{
+                           background: currentTrack?.id === track.id && isPlaying
+                             ? 'linear-gradient(135deg, #ec4899 0%, #d946ef 100%)'
+                             : 'var(--panel-bg)',
+                           boxShadow: currentTrack?.id === track.id && isPlaying
+                             ? '0 4px 12px rgba(217,70,239,0.35)'
+                             : 'var(--shadow-nm-inset)',
+                           border: currentTrack?.id === track.id && isPlaying
+                             ? 'none'
+                             : '1px solid var(--panel-border)'
+                         }}>
+                      {currentTrack?.id === track.id && isPlaying ? (
+                        <Pause className="w-4 h-4 text-white fill-current" />
+                      ) : (
+                        <Play className="w-4 h-4 text-fuchsia-400 fill-current ml-0.5" />
+                      )}
+                    </div>
                   </div>
                 </>
               )}
@@ -638,23 +827,26 @@ export default function App() {
           >
             <div 
               onClick={() => setShowFullPlayer(true)}
-              className={`backdrop-blur-xl border rounded-3xl p-3 flex items-center shadow-2xl transition-colors duration-500 ${
-                isDarkMode ? 'bg-[#1a1614]/90 border-white/10 shadow-black/80' : 'bg-white/90 border-black/10 shadow-orange-900/10'
-              }`}
+              className="backdrop-blur-xl border rounded-[2rem] p-3.5 flex items-center transition-all duration-500 shadow-[0_8px_32px_rgba(0,0,0,0.4)]"
+              style={{
+                backgroundColor: 'var(--panel-bg)',
+                borderColor: 'var(--panel-border)',
+                color: 'var(--text-color)'
+              }}
             >
-              <div className="w-10 h-10 rounded-xl bg-accent-soft/30 flex items-center justify-center ml-3 flex-shrink-0 border border-accent/10">
-                <Music4 className="w-5 h-5 text-accent animate-pulse" style={{ color: 'var(--accent-color)' }} />
+              <div className="w-10 h-10 rounded-xl bg-fuchsia-500/10 flex items-center justify-center ml-3.5 flex-shrink-0 border border-fuchsia-500/20">
+                <Music4 className="w-5 h-5 text-fuchsia-400 animate-pulse" />
               </div>
-              <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-medium truncate">{currentTrack.title}</h4>
-                <p className={`text-[10px] uppercase tracking-widest opacity-40`}>{currentTrack.artist}</p>
+              <div className="flex-1 min-w-0 text-right">
+                <h4 className="text-sm font-bold truncate">{currentTrack.title}</h4>
+                <p className="text-[10px] uppercase tracking-wider opacity-40">برخه {currentTrack.filename?.replace(/\.[^/.]+$/, "")}</p>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <button 
                   onClick={(e) => { e.stopPropagation(); togglePlay(); }}
-                  className="w-10 h-10 flex items-center justify-center"
+                  className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 border border-white/5 hover:bg-white/10"
                 >
-                  {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-current" />}
+                  {isPlaying ? <Pause className="w-4.5 h-4.5 text-fuchsia-400 fill-current" /> : <Play className="w-4.5 h-4.5 text-fuchsia-400 fill-current ml-0.5" />}
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); handleNext(); }}
@@ -663,8 +855,8 @@ export default function App() {
                   <SkipForward className="w-5 h-5" />
                 </button>
               </div>
-              <div className={`absolute top-0 left-0 h-1 w-full rounded-t-3xl overflow-hidden ${isDarkMode ? 'bg-white/5' : 'bg-black/5'}`}>
-                <div className="h-full bg-accent transition-all duration-300" style={{ width: `${progress}%`, backgroundColor: 'var(--accent-color)' }} />
+              <div className="absolute top-0 left-0 h-1 w-full rounded-t-3xl overflow-hidden bg-white/5">
+                <div className="h-full bg-gradient-to-r from-pink-500 to-fuchsia-500 transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
             </div>
           </motion.div>
@@ -679,152 +871,184 @@ export default function App() {
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-            className={`fixed inset-0 z-50 flex flex-col px-8 pt-4 pb-16 transition-colors duration-500 safe-area-top safe-area-bottom ${isDarkMode ? 'bg-[#0a0502]' : 'bg-[#fdf8f5]'}`}
+            className="fixed inset-0 z-50 flex flex-col px-8 pt-8 pb-16 transition-colors duration-500 safe-area-top safe-area-bottom bg-[var(--bg-color)] text-[var(--text-color)] overflow-y-auto no-scrollbar"
           >
-            <div className="absolute inset-0 pointer-events-none overflow-hidden h-[60%] opacity-50">
+            {/* Background floating gradient aura in full player */}
+            <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-40">
               <motion.div 
-                animate={{ scale: [1, 1.2, 1], rotate: [0, 5, 0] }}
-                transition={{ duration: 15, repeat: Infinity }}
-                className="absolute -top-1/4 -right-1/4 w-[150%] aspect-square blur-3xl opacity-50" 
-                style={{ backgroundImage: `radial-gradient(circle at center, var(--accent-soft), transparent)` }}
+                animate={{ scale: [1, 1.25, 1], rotate: [0, 10, 0] }}
+                transition={{ duration: 15, repeat: Infinity, ease: 'easeInOut' }}
+                className="absolute -top-1/4 -right-1/4 w-[150%] aspect-square blur-3xl opacity-55" 
+                style={{ backgroundImage: `radial-gradient(circle at center, rgba(217,70,239,0.3) 0%, rgba(139,92,246,0.1) 60%, transparent 100%)` }}
               />
             </div>
 
             <header className="relative z-10 flex items-center justify-between mb-8 mt-4">
               <button 
                 onClick={() => setShowFullPlayer(false)}
-                className={`w-12 h-12 flex items-center justify-center border rounded-2xl transition-all ${isDarkMode ? 'bg-white/5 border-white/10 text-white/50' : 'bg-black/5 border-black/10 text-black/50'}`}
+                className="w-11 h-11 flex items-center justify-center rounded-full transition-all border shadow-[var(--shadow-nm)]"
+                style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}
               >
-                <ChevronDown className="w-6 h-6" />
+                <ChevronDown className="w-5 h-5" />
               </button>
-              <span className={`text-[10px] uppercase tracking-[0.2em] font-mono opacity-30`}>اوس غږیږي</span>
-              <button 
-                onClick={() => toggleFavorite(currentTrack.id)}
-                className={`w-12 h-12 flex items-center justify-center rounded-2xl transition-all ${favorites.includes(currentTrack.id) ? 'bg-accent-soft text-accent' : `${isDarkMode ? 'bg-white/5 border-white/10 text-white/30' : 'bg-black/5 border-black/10 text-black/30'}`}`}
-                style={favorites.includes(currentTrack.id) ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent-color)' } : {}}
-              >
-                <Heart className={`w-5 h-5 ${favorites.includes(currentTrack.id) ? 'fill-current' : ''}`} />
-              </button>
+              <span className="text-[10px] uppercase tracking-[0.25em] font-bold opacity-40">اوس غږیږي</span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowSleepModal(true)}
+                  className="w-11 h-11 flex items-center justify-center rounded-full transition-all border relative"
+                  style={{ 
+                    backgroundColor: sleepTimer !== null ? 'rgba(99,102,241,0.2)' : 'var(--panel-bg)', 
+                    borderColor: sleepTimer !== null ? 'rgba(99,102,241,0.5)' : 'var(--panel-border)',
+                    color: sleepTimer !== null ? '#818cf8' : 'inherit'
+                  }}
+                >
+                  <Moon className="w-5 h-5 text-indigo-400" />
+                  {sleepTimer !== null && (
+                    <span className="absolute -bottom-1 -right-1 text-[8px] font-mono font-black bg-indigo-600 text-white px-1 rounded-full">
+                      {Math.ceil((timeLeft || 0) / 60)}m
+                    </span>
+                  )}
+                </button>
+                <button 
+                  onClick={() => toggleFavorite(currentTrack.id)}
+                  className="w-11 h-11 flex items-center justify-center rounded-full transition-all border"
+                  style={{ 
+                    backgroundColor: favorites.includes(currentTrack.id) ? 'rgba(217,70,239,0.15)' : 'var(--panel-bg)', 
+                    borderColor: favorites.includes(currentTrack.id) ? 'rgba(217,70,239,0.4)' : 'var(--panel-border)',
+                    color: favorites.includes(currentTrack.id) ? '#d946ef' : 'inherit'
+                  }}
+                >
+                  <Heart className={`w-5 h-5 ${favorites.includes(currentTrack.id) ? 'fill-current' : ''}`} />
+                </button>
+              </div>
             </header>
 
             <div className="relative z-10 flex-1 flex flex-col items-center justify-center mt-4">
+              {/* Massive Neumorphic Concentric Cover Disk */}
               <motion.div 
                 layoutId="player-art"
-                className={`w-full aspect-square max-w-[280px] rounded-[3rem] shadow-2xl mb-8 flex flex-col items-center justify-center relative border overflow-hidden ${
-                  isDarkMode 
-                    ? 'bg-white/5 border-white/10 shadow-black/40' 
-                    : 'bg-black/5 border-black/5 shadow-black/5'
-                }`}
+                className="w-64 h-64 rounded-full flex items-center justify-center mb-10 relative border backdrop-blur-md shadow-[0_20px_50px_rgba(0,0,0,0.3)]"
+                style={{
+                  backgroundColor: 'var(--panel-bg)',
+                  borderColor: 'var(--panel-border)',
+                }}
               >
-                {/* Animated pulsating background aura */}
+                {/* Pulsating outer light ring */}
                 <AnimatePresence>
                   {isPlaying && (
                     <motion.div 
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: [1, 1.2, 1], opacity: [0.1, 0.3, 0.1] }}
-                      exit={{ scale: 0.8, opacity: 0 }}
+                      initial={{ scale: 0.9, opacity: 0 }}
+                      animate={{ scale: [1, 1.15, 1], opacity: [0.15, 0.35, 0.15] }}
+                      exit={{ scale: 0.9, opacity: 0 }}
                       transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                      className="absolute inset-0 rounded-[3rem]"
-                      style={{ backgroundImage: `radial-gradient(circle, var(--accent-soft) 20%, transparent 80%)` }}
+                      className="absolute inset-0 rounded-full"
+                      style={{ backgroundImage: `radial-gradient(circle, rgba(217,70,239,0.2) 20%, transparent 80%)` }}
                     />
                   )}
                 </AnimatePresence>
 
-                {/* Rotating Vinyl/CD pattern styled block */}
-                <motion.div 
-                  animate={isPlaying ? { rotate: 360 } : {}}
-                  transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-                  className="w-36 h-36 rounded-full border-4 border-dashed flex items-center justify-center relative"
-                  style={{ borderColor: 'var(--accent-color)' }}
-                >
-                  <div className="absolute inset-2 rounded-full border border-accent/20" />
-                  <div className="absolute inset-4 rounded-full border border-accent/30" />
-                  <div className="w-16 h-16 rounded-full bg-accent-soft/40 flex items-center justify-center">
-                    <Music4 className="w-8 h-8 text-accent animate-pulse" style={{ color: 'var(--accent-color)' }} />
-                  </div>
-                </motion.div>
-
-                {/* Equalizer lines inside full player card */}
-                {isPlaying && (
-                  <div className="flex gap-1.5 items-end h-8 mt-5">
-                    <motion.div animate={{ height: [6, 24, 8] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.1 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
-                    <motion.div animate={{ height: [12, 6, 28] }} transition={{ repeat: Infinity, duration: 0.6, delay: 0.3 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
-                    <motion.div animate={{ height: [24, 10, 18] }} transition={{ repeat: Infinity, duration: 0.7, delay: 0.2 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
-                    <motion.div animate={{ height: [8, 28, 12] }} transition={{ repeat: Infinity, duration: 0.5, delay: 0.4 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
-                    <motion.div animate={{ height: [18, 6, 24] }} transition={{ repeat: Infinity, duration: 0.8, delay: 0.5 }} className="w-1.5 rounded-full bg-accent" style={{ backgroundColor: 'var(--accent-color)' }} />
-                  </div>
-                )}
+                {/* Concentric Circle 2 */}
+                <div className="absolute w-52 h-52 rounded-full border border-white/5 flex items-center justify-center bg-black/10 shadow-inner">
+                  {/* Concentric Circle 3 / Vinyl Record Disc with rotating animation */}
+                  <motion.div 
+                    animate={isPlaying ? { rotate: 360 } : {}}
+                    transition={{ duration: 16, repeat: Infinity, ease: "linear" }}
+                    className="w-40 h-40 rounded-full flex items-center justify-center relative shadow-lg"
+                    style={{
+                      background: 'radial-gradient(circle, #221c38 0%, #0d091a 100%)',
+                      border: '4px solid rgba(255, 255, 255, 0.05)'
+                    }}
+                  >
+                    <div className="absolute inset-3 rounded-full border border-white/5 border-dashed opacity-45" />
+                    <div className="absolute inset-6 rounded-full border border-white/5 opacity-35" />
+                    <div className="absolute inset-9 rounded-full border border-white/5 opacity-25" />
+                    
+                    {/* Glowing pink center core */}
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 via-fuchsia-500 to-indigo-600 flex items-center justify-center shadow-[0_0_15px_rgba(217,70,239,0.5)]">
+                      <Music4 className="w-6 h-6 text-white animate-pulse" />
+                    </div>
+                  </motion.div>
+                </div>
               </motion.div>
 
               <div className="text-center mb-8 w-full px-4">
-                <h2 className="text-2xl font-bold mb-2 leading-tight">{currentTrack.title}</h2>
-                <p className="text-accent font-bold tracking-wide text-lg" style={{ color: 'var(--accent-color)' }}>{currentTrack.artist}</p>
-                <p className={`text-[10px] mt-4 inline-block px-4 py-1.5 rounded-full uppercase tracking-tighter font-semibold ${isDarkMode ? 'bg-white/5 text-white/30' : 'bg-black/5 text-black/30'}`}>
+                <h2 className="text-2xl font-black mb-1 leading-tight tracking-tight">{currentTrack.title}</h2>
+                <p className="text-fuchsia-400 font-extrabold tracking-wide text-lg">{currentTrack.artist}</p>
+                <p className="text-[10px] mt-4 inline-block px-4 py-1.5 rounded-full font-bold uppercase tracking-wide border"
+                   style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}>
                   {currentTrack.categoryLabel}
                 </p>
               </div>
 
-              <div className="w-full mb-10 px-2">
+              {/* Custom Seekbar Slider */}
+              <div className="w-full mb-8 px-2">
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={progress}
                   onChange={handleSeek}
-                  className={`w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-accent ${isDarkMode ? 'bg-white/10' : 'bg-black/10'}`}
+                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-white/10 accent-fuchsia-500"
+                  style={{
+                    background: `linear-gradient(to left, #d946ef ${progress}%, rgba(255,255,255,0.1) ${progress}%)`
+                  }}
                 />
-                <div className={`flex justify-between mt-4 text-xs font-mono font-medium opacity-30`}>
+                <div className="flex justify-between mt-3 text-xs font-mono font-bold opacity-45">
                   <span>{formatTime(audioRef.current?.currentTime || 0)}</span>
                   <span>{formatTime(audioRef.current?.duration || 0)}</span>
                 </div>
               </div>
 
+              {/* Tactile Premium Control Console */}
               <div className="w-full flex items-center justify-between px-2">
-                <button className="opacity-40 hover:opacity-100 transition-opacity">
-                  <LayoutGrid className="w-5 h-5" />
-                </button>
+                <div className="w-10" /> {/* Spacer to align */}
                 
                 <div className="flex items-center gap-6">
+                  {/* Previous Button - Tactile tile */}
                   <button 
                     onClick={handlePrev}
-                    className={`p-5 rounded-3xl transition-all border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all border shadow-[var(--shadow-nm)] hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}
                   >
-                    <SkipBack className="w-6 h-6 fill-current" />
+                    <SkipBack className="w-5 h-5 fill-current text-[var(--text-color)] opacity-85" />
                   </button>
 
+                  {/* Gigantic Glow Play/Pause Button */}
                   <motion.button 
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     onClick={togglePlay}
-                    className="w-20 h-20 bg-accent rounded-full flex items-center justify-center text-white shadow-xl relative group"
-                    style={{ backgroundColor: 'var(--accent-color)', boxShadow: `0 20px 25px -5px var(--accent-soft)` }}
+                    className="w-20 h-20 rounded-full flex items-center justify-center text-white relative group transition-all duration-300"
+                    style={{ 
+                      background: 'linear-gradient(135deg, #ec4899 0%, #d946ef 50%, #8b5cf6 100%)',
+                      boxShadow: '0 10px 30px rgba(217,70,239,0.45)'
+                    }}
                   >
-                    <div className="absolute inset-0 bg-white/20 rounded-full scale-100 group-hover:scale-110 opacity-0 group-hover:opacity-100 transition-all" />
-                    {isPlaying ? <Pause className="w-8 h-8 relative" /> : <Play className="w-8 h-8 fill-current ml-1 relative" />}
+                    {isPlaying ? <Pause className="w-7 h-7 relative" /> : <Play className="w-7 h-7 fill-current ml-1 relative" />}
                   </motion.button>
 
+                  {/* Next Button - Tactile tile */}
                   <button 
                     onClick={handleNext}
-                    className={`p-5 rounded-3xl transition-all border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all border shadow-[var(--shadow-nm)] hover:scale-105 active:scale-95"
+                    style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)' }}
                   >
-                    <SkipForward className="w-6 h-6 fill-current" />
+                    <SkipForward className="w-5 h-5 fill-current text-[var(--text-color)] opacity-85" />
                   </button>
                 </div>
 
-                <button className="opacity-40 hover:opacity-100 transition-opacity">
-                  <Volume2 className="w-5 h-5" />
-                </button>
+                <div className="w-10" /> {/* Spacer to align */}
               </div>
             </div>
 
-            <footer className={`relative z-10 flex justify-center mt-12 gap-8 opacity-40`}>
+            <footer className="relative z-10 flex justify-center mt-12 gap-8 opacity-40">
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                <span className="text-[10px] font-mono font-bold tracking-tight">وخت تېر شو</span>
+                <span className="text-[10px] font-mono font-bold tracking-tight">غږیږي</span>
               </div>
               <div className="flex items-center gap-2">
                 <ListIcon className="w-4 h-4" />
-                <span className="text-[10px] font-mono font-bold tracking-tight">اضافه شوي</span>
+                <span className="text-[10px] font-mono font-bold tracking-tight">مرتب شوی</span>
               </div>
             </footer>
           </motion.div>
@@ -874,6 +1098,99 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Night Mode & Sleep Timer Modal */}
+      <AnimatePresence>
+        {showSleepModal && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSleepModal(false)}
+              className="fixed inset-0 z-[70] bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[80] w-[90%] max-w-sm rounded-[3rem] shadow-2xl border overflow-hidden flex flex-col p-7 backdrop-blur-2xl"
+              style={{ backgroundColor: 'var(--panel-bg)', borderColor: 'var(--panel-border)', color: 'var(--text-color)' }}
+            >
+              <div className="flex flex-col items-center mb-5">
+                <div className="w-14 h-14 bg-gradient-to-tr from-indigo-600 to-violet-500 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-2">
+                  <Moon className="w-7 h-7 text-white" />
+                </div>
+                <h3 className="text-xl font-black">د شپې موډ او د خوب ټایمر</h3>
+                <p className="text-[10px] opacity-40 uppercase tracking-widest mt-0.5">Night Mode & Sleep Timer</p>
+              </div>
+
+              {/* Night Theme Toggle */}
+              <div className="flex items-center justify-between p-3.5 rounded-2xl border mb-5" style={{ borderColor: 'var(--panel-border)', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+                <div className="flex items-center gap-3">
+                  {isDarkMode ? <Moon className="w-5 h-5 text-indigo-400" /> : <Sun className="w-5 h-5 text-amber-400" />}
+                  <div className="text-right">
+                    <p className="text-xs font-bold">د شپې تیاره بڼه (Dark Mode)</p>
+                    <p className="text-[10px] opacity-40">{isDarkMode ? 'د شپې حالت فعال دی' : 'ورځنی حالت فعال دی'}</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className={`w-12 h-6 rounded-full p-1 transition-colors duration-300 ${isDarkMode ? 'bg-indigo-600' : 'bg-gray-400'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform duration-300 ${isDarkMode ? '-translate-x-6' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {/* Sleep Timer Options */}
+              <div className="space-y-2 mb-5">
+                <p className="text-xs font-bold opacity-60 mb-2 text-right">د اتومات بندېدو خوب ټایمر:</p>
+                {[
+                  { min: 15, label: '۱۵ دقیقې' },
+                  { min: 30, label: '۳۰ دقیقې' },
+                  { min: 45, label: '۴۵ دقیقې' },
+                  { min: 60, label: '۶۰ دقیقې (۱ ساعت)' },
+                ].map((option) => (
+                  <button
+                    key={option.min}
+                    onClick={() => startSleepTimer(option.min)}
+                    className={`w-full p-3 rounded-2xl border text-right text-xs font-bold transition-all flex items-center justify-between ${sleepTimer === option.min ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300 shadow-md' : 'opacity-70 hover:opacity-100'}`}
+                    style={{ borderColor: sleepTimer === option.min ? '#6366f1' : 'var(--panel-border)' }}
+                  >
+                    <span>{option.label}</span>
+                    {sleepTimer === option.min && <Clock className="w-4 h-4 text-indigo-400" />}
+                  </button>
+                ))}
+
+                {sleepTimer !== null && (
+                  <button
+                    onClick={() => startSleepTimer(null)}
+                    className="w-full p-2.5 rounded-2xl border border-red-500/30 bg-red-500/10 text-red-400 text-center text-xs font-bold transition-all mt-2"
+                  >
+                    ټایمر بندول (Cancel Timer)
+                  </button>
+                )}
+              </div>
+
+              {timeLeft !== null && (
+                <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-2xl p-2.5 text-center mb-5">
+                  <p className="text-[10px] text-indigo-300 font-bold mb-0.5">پاتې وخت:</p>
+                  <p className="text-base font-mono font-black text-indigo-400">
+                    {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                  </p>
+                </div>
+              )}
+
+              <button 
+                onClick={() => setShowSleepModal(false)}
+                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-2xl hover:bg-indigo-700 transition-all text-xs shadow-lg shadow-indigo-600/30"
+              >
+                بشپړ شو
+              </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Info Modal */}
       <AnimatePresence>
         {showInfo && (
@@ -902,44 +1219,36 @@ export default function App() {
 
                 <div className="space-y-4 text-right">
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">📱 نوم:</p>
-                    <p className="text-sm font-bold">شرعي مسايلو حل</p>
+                    <p className="text-[10px] opacity-40 mb-1">📱 د کاريال نوم:</p>
+                    <p className="text-sm font-bold">خير الدين بربروسا</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">🎙 جوابونکي:</p>
-                    <p className="text-sm font-bold">محترم مفتي محمد آصف مبارز صاحب</p>
+                    <p className="text-[10px] opacity-40 mb-1">🔢 د کاريال ورژن:</p>
+                    <p className="text-sm font-bold">لومړی (1.0)</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">🔢 ورژن:</p>
-                    <p className="text-sm font-bold">لومړی (1.0.0)</p>
-                  </div>
-                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">🎧 بڼه:</p>
+                    <p className="text-[10px] opacity-40 mb-1">🎧 د کاريال بڼه:</p>
                     <p className="text-sm font-bold">غږيز جوابونه</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
                     <p className="text-[10px] opacity-40 mb-1">📚 برخې:</p>
-                    <p className="text-sm font-bold">ټولې ۵۰ برخې</p>
+                    <p className="text-sm font-bold">ټولې ۵ برخې</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">👨💻 جوړوونکی:</p>
+                    <p className="text-[10px] opacity-40 mb-1">👨💻 کاريال جوړوونکی:</p>
                     <p className="text-sm font-bold">طالب العلم خبيب تکل</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
                     <p className="text-[10px] opacity-40 mb-1">🗂 ترتيب کوونکی:</p>
-                    <p className="text-sm font-bold">الحاج داکتر فريدون احرار</p>
+                    <p className="text-sm font-bold">الحاج داکتر فريدون احرار.</p>
                   </div>
                   <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">🤝 مرسته کوونکی:</p>
-                    <p className="text-sm font-bold">عبدالستار سعيد صاحب</p>
-                  </div>
-                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-white/5 border-white/5' : 'bg-black/5 border-black/5'}`}>
-                    <p className="text-[10px] opacity-40 mb-1">🏢 اداره:</p>
+                    <p className="text-[10px] opacity-40 mb-1">🏢 نشروونکې اداره:</p>
                     <p className="text-sm font-bold">د اسلامي کاريالونو څانګه</p>
                   </div>
-                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-orange-500/5 border-orange-500/20' : 'bg-orange-500/5 border-orange-500/10'}`}>
-                    <p className="text-[10px] text-orange-500 mb-1">🔐 امنیت:</p>
-                    <p className="text-[10px] leading-relaxed">ددې اپلېکېشن ټولې مهمې برخې د AES رمزګذاري پواسطه رمز (کوډ) شوي.</p>
+                  <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-500/5 border-indigo-500/10'}`}>
+                    <p className="text-[10px] text-indigo-400 mb-1 font-bold">🔐 دحفاظت په اړه:</p>
+                    <p className="text-[11px] leading-relaxed font-semibold">ددې اپلېکېشن ټولې مهمې برخې د AES رمزګذاري پواسطه رمز (کوډ) شوي.</p>
                   </div>
                 </div>
               </div>
@@ -1054,7 +1363,7 @@ export default function App() {
             initial={{ opacity: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.8, ease: 'easeInOut' }}
-            className="fixed inset-0 z-[100] bg-[#0a0502] flex flex-col items-center justify-center text-white"
+            className="fixed inset-0 z-[100] bg-[var(--bg-color)] flex flex-col items-center justify-center text-[var(--text-color)]"
           >
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
@@ -1062,13 +1371,13 @@ export default function App() {
               transition={{ duration: 0.5, delay: 0.2 }}
               className="relative"
             >
-              <div className="w-24 h-24 bg-orange-500 rounded-[2rem] flex items-center justify-center shadow-2xl shadow-orange-500/20 rotate-12">
+              <div className="w-24 h-24 bg-[var(--accent-color)] rounded-[2rem] flex items-center justify-center shadow-2xl shadow-[var(--accent-soft)] rotate-12" style={{ boxShadow: '0 20px 40px var(--accent-soft)' }}>
                 <Music4 className="w-12 h-12 text-white -rotate-12" />
               </div>
               <motion.div 
                 animate={{ scale: [1, 1.2, 1], opacity: [0.3, 0.6, 0.3] }}
                 transition={{ repeat: Infinity, duration: 2 }}
-                className="absolute inset-0 bg-orange-500 rounded-[2rem] blur-2xl -z-10"
+                className="absolute inset-0 bg-[var(--accent-color)] rounded-[2rem] blur-2xl -z-10"
               />
             </motion.div>
             
@@ -1076,17 +1385,17 @@ export default function App() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.5 }}
-              className="mt-10 text-3xl font-bold tracking-tight"
+              className="mt-10 text-3xl font-bold tracking-tight text-center"
             >
-              شرعي مسايلو حل
+              خير الدين بربروسا
             </motion.h2>
             <motion.p
               initial={{ opacity: 0 }}
-              animate={{ opacity: 0.4 }}
+              animate={{ opacity: 0.6 }}
               transition={{ delay: 0.7 }}
-              className="mt-2 text-sm font-mono uppercase tracking-[0.3em]"
+              className="mt-2 text-sm uppercase tracking-[0.2em] font-semibold"
             >
-              مفتي محمد آصف مبارز
+              غږيز جوابونه - ټولې ۵ برخې
             </motion.p>
 
             <motion.div
@@ -1138,7 +1447,7 @@ export default function App() {
           background: var(--accent-color);
           border-radius: 50%;
           cursor: pointer;
-          border: 3px solid ${isDarkMode ? '#0a0502' : '#fdf8f5'};
+          border: 3px solid var(--bg-color);
           box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
         input[type='range']::-moz-range-thumb {
@@ -1147,7 +1456,7 @@ export default function App() {
           background: var(--accent-color);
           border-radius: 50%;
           cursor: pointer;
-          border: 3px solid ${isDarkMode ? '#0a0502' : '#fdf8f5'};
+          border: 3px solid var(--bg-color);
           box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
       `}</style>
